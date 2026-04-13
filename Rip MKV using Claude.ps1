@@ -172,7 +172,7 @@ foreach ($line in $infoOutput) {
             $titles[$tNum].AudioTracks[$trackNum].Language = $matches[3]
         }
     }
-	if ($line -match '^TINFO:(\d+),25,0,"(\d+)"') {
+    if ($line -match '^TINFO:(\d+),25,0,"(\d+)"') {
         $tNum = [int]$matches[1]
         if (-not $titles.ContainsKey($tNum)) { $titles[$tNum] = New-Title }
         $titles[$tNum].ChapterCount = [int]$matches[2]
@@ -192,7 +192,7 @@ foreach ($t in ($titles.GetEnumerator() | Where-Object { $_.Value.AudioTracks.Co
     $audioList = ($t.Value.AudioTrackNums | ForEach-Object { $t.Value.AudioTracks[$_] } | ForEach-Object { "$($_.ShortName)[$($_.Language)]" }) -join ", "
     Write-Log "  Title $($t.Key): $($t.Value.VideoCodec), $($t.Value.Duration), $($t.Value.SizeText), $($t.Value.Resolution), $($t.Value.ChapterCount) chapters"
     Write-Log "    Audio: $audioList"
-	$titleLines += "Title $($t.Key): $($t.Value.VideoCodec), $($t.Value.Duration), $($t.Value.SizeText), $($t.Value.Resolution), $($t.Value.ChapterCount) chapters, Audio: $audioList"
+    $titleLines += "Title $($t.Key): $($t.Value.VideoCodec), $($t.Value.Duration), $($t.Value.SizeText), $($t.Value.Resolution), $($t.Value.ChapterCount) chapters, Audio: $audioList"
 }
 
 # Ask Claude to pick the best title
