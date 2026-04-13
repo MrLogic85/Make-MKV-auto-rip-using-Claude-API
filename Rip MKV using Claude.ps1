@@ -318,7 +318,7 @@ if (-not $match.Success) {
 
 if ($keepIds.Count -eq 0) {
     Write-Log "No track IDs extracted. Keeping all tracks."
-    $keepIds = $audioTracks | ForEach-Object { "$($_.id)" }
+    $keepIds = $mkvAudioTracks | ForEach-Object { "$($_.id)" }
 }
 
 # Filter with MKVToolNix
