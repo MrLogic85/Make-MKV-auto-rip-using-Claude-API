@@ -52,15 +52,15 @@ $mkvpropedit             = "C:\Program Files\MKVToolNix\mkvpropedit.exe"
 
 ```
 Disc
-    --> MakeMKV       identify disc and available titles
-    --> Claude API    identify movie name from disc metadata
-    --> Claude API    select main feature title
-    --> MakeMKV       rip selected title to local SSD
-    --> MKVToolNix    identify audio tracks in ripped MKV
-    --> Claude API    select audio tracks to keep
-    --> MKVToolNix    filter audio tracks
-    --> aspect ratio  check and optionally correct display dimensions
-    --> NAS           create folder, write NFO, copy MKV
+    %% MakeMKV       identify disc and available titles
+    %% Claude API    identify movie name from disc metadata
+    %% Claude API    select main feature title
+    %% MakeMKV       rip selected title to local SSD
+    %% MKVToolNix    identify audio tracks in ripped MKV
+    %% Claude API    select audio tracks to keep
+    %% MKVToolNix    filter audio tracks
+    %% aspect ratio  check and optionally correct display dimensions
+    %% NAS           create folder, write NFO, copy MKV
 ```
 
 ## Audio selection rules
