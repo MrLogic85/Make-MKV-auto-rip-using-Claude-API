@@ -1,6 +1,6 @@
 ﻿# Rip MKV using Claude
 
-A PowerShell script that rips a Blu-ray disc to MKV, intelligently selects the correct title and audio tracks using the Claude API, and copies the result to a NAS or any destination folder.
+A PowerShell script that rips a Blu-ray disc to MKV, intelligently selects the correct title and audio tracks using the Claude API, and copies the result to any destination folder.
 
 ## Features
 
@@ -9,7 +9,7 @@ A PowerShell script that rips a Blu-ray disc to MKV, intelligently selects the c
 - **Smart audio filtering** – Claude selects audio tracks based on configured preferred languages and audio quality
 - **Native language preservation** – always keeps the film's original language even if not in the preferred list
 - **Aspect ratio check** – detects broken display dimensions (e.g. 1:1 square video) and prompts for correction
-- **Local SSD temp storage** – rips to a local SSD first to avoid NAS write bottlenecks
+- **Local SSD temp storage** – rips to a local SSD first before copying to the destination, avoiding slow network write speeds
 - **NFO source tag** – writes a minimal NFO for media managers like tinyMediaManager
 
 ## Requirements
@@ -61,7 +61,7 @@ flowchart TD
     G --> H[MKVToolNix: filter audio tracks]
     H --> I{Aspect ratio OK?}
     I -- No --> J[Prompt user to correct display dimensions]
-    J --> K[NAS: create folder, write NFO, copy MKV]
+    J --> K[Destination: create folder, write NFO, copy MKV]
     I -- Yes --> K
 ```
 
@@ -78,11 +78,13 @@ Claude applies these rules when selecting audio tracks:
 
 Movies are saved as:
 ```
-Z:\Movies\Movie Name (Year)\Movie Name (Year).mkv
-Z:\Movies\Movie Name (Year)\Movie Name (Year).nfo
+<destRoot>\Movie Name (Year)\Movie Name (Year).mkv
+<destRoot>\Movie Name (Year)\Movie Name (Year).nfo
 ```
 
 Compatible with [tinyMediaManager](https://www.tinymediamanager.org/) and media players like Zidoo that use NFO metadata.
+
+> **Tip:** If your destination is a NAS, mount it as a network drive and set `$defaultDestRoot` to that drive letter. The script rips to local SSD first to avoid slow network writes during the MakeMKV step.
 
 ## Notes
 
