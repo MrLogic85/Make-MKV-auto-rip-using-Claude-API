@@ -58,8 +58,8 @@ if ([string]::IsNullOrWhiteSpace($destRoot)) {
 
 # Find disc
 Write-Log "Scanning for disc..."
-$discInfo = & $makemkvcon -r info disc:0 2>&1
-$driveFound = $discInfo | Where-Object { $_ -match '^DRV:0,' -and $_ -notmatch ',256,' }
+$infoOutput = & $makemkvcon -r info disc:0 2>&1
+$driveFound = $infoOutput | Where-Object { $_ -match '^DRV:0,' -and $_ -notmatch ',256,' }
 
 if (-not $driveFound) {
     Write-Log "Error: No disc found in drive 0. Please insert disc and try again."
@@ -67,7 +67,6 @@ if (-not $driveFound) {
 }
 
 Write-Log "Disc found. Fetching title information..."
-$infoOutput = & $makemkvcon -r info disc:0 2>&1
 
 # Extract disc name from CINFO
 $discName = ""
