@@ -222,8 +222,13 @@ if ($titleMatch.Success -and $titleMatch.Groups[1].Value -match '^\d+$') {
     Write-Log "Claude selected title: $chosenTitle"
 } else {
     Write-Log "Claude could not determine title. Please select manually."
-    Write-Host ""
-    $val = Read-Host "Enter title number"
+    $validTitleNums = $titles.Keys | Where-Object { $titles[$_].AudioTracks.Count -gt 0 }
+    do {
+        Write-Host ""
+        $val = Read-Host "Enter title number ($($validTitleNums -join ', '))"
+        $isValid = $val -match '^\d+$' -and $validTitleNums -contains [int]$val
+        if (-not $isValid) { Write-Host "Invalid title number. Please try again." }
+    } while (-not $isValid)
     $chosenTitle = [int]$val
 }
 
