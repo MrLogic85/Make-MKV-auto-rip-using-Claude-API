@@ -117,6 +117,8 @@ if (-not $movieName) {
     }
 }
 
+$movieName = $movieName -replace ':', ' -' -replace '"', "'" -replace '[\\/*?<>|]', ''
+$movieName = $movieName -replace '\s{2,}', ' '
 $movieFolder = Join-Path $destRoot $movieName
 $finalMkv = Join-Path $movieFolder "$movieName.mkv"
 
