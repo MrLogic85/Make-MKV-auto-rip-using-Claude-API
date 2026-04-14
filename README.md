@@ -11,6 +11,7 @@ A PowerShell script that rips Blu-ray discs to MKV, intelligently selects the co
 - **Aspect ratio check** – detects broken display dimensions (e.g. 1:1 square video) and prompts for correction
 - **Local SSD temp storage** – rips to a local SSD first before copying to the destination, avoiding slow network write speeds
 - **Multi-disc loop** – ejects the disc after ripping and waits for the next one; exits if the same disc is re-inserted
+- **Background copy** – copies the finished MKV to the destination in the background while the next disc is already being ripped
 - **NFO source tag** – writes a minimal NFO for media managers like tinyMediaManager
 
 ## Requirements
@@ -76,9 +77,10 @@ flowchart TD
     K -- No --> L[Prompt user to correct display dimensions]
     L --> M[Copy to destination, write NFO]
     K -- Yes --> M
-    M --> N[Eject disc]
-    N --> O[Wait for next disc]
-    O --> D
+    M --> N[Copy MKV to destination in background]
+    N --> O[Eject disc]
+    O --> P[Wait for next disc]
+    P --> D
 ```
 
 ## Audio selection rules
