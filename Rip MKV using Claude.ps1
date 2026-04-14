@@ -459,4 +459,15 @@ Write-Log "Size: $fileSize GB"
 Write-Log "Location: $finalMkv"
 Write-Log "Log saved to: $logFile"
 
+# Eject disc
+$driveLine = $driveFound | Select-Object -First 1
+$driveLetter = if ($driveLine -match '"([A-Z]:)"') { $matches[1] } else { $null }
+if ($driveLetter) {
+    Write-Log "Ejecting disc ($driveLetter)..."
+    $shell = New-Object -ComObject Shell.Application
+    $shell.Namespace(17).ParseName($driveLetter).InvokeVerb("Eject")
+} else {
+    Write-Log "Could not determine drive letter for eject."
+}
+
 } # end while
