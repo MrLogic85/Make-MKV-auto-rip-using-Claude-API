@@ -90,7 +90,11 @@ flowchart TD
     H4 -- Skip --> Q
     I[MKVToolNix: identify audio tracks]
     I --> J[Claude: select audio tracks to keep]
-    J --> K[MKVToolNix: filter audio tracks]
+    J --> J2{Selected?}
+    J2 -- Yes --> K
+    J2 -- No --> J3[Prompt: select audio tracks]
+    J3 --> K
+    K[MKVToolNix: filter audio tracks]
     K --> L{Aspect ratio near 1:1?}
     L -- Yes --> M[Prompt: correct display dimensions]
     M --> N
