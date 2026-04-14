@@ -64,48 +64,43 @@ $mkvpropedit             = "C:\Program Files\MKVToolNix\mkvpropedit.exe"
 
 ```mermaid
 flowchart TD
-    A([Start]) --> B[Select destination]
-    B --> C
-
-    C[Scan for disc] --> D{Disc readable?}
-    D -- No --> D1[Wait and retry]
-    D1 --> C
-    D -- Yes --> E{Same disc as last rip?}
-    E -- Yes --> Z2([Exit with warning])
-    E -- No --> F[Claude: identify movie name]
-    F --> F2{Identified?}
-    F2 -- No --> F3[Prompt: enter movie name]
-    F3 --> G
-    F2 -- Yes --> G[Claude: select main title]
-    G --> G2{Selected?}
-    G2 -- No --> G3[Prompt: select title number]
-    G3 --> H
-    G2 -- Yes --> H[MakeMKV: rip title to local SSD]
-    H --> H2{Rip succeeded?}
+    A([Start]) --> B
+    B[Select destination] --> C
+    C[Scan for disc] --> F
+    F[Claude: identify movie name] --> F2
+    F2{Identified?}
+    F2 -- Yes --> G
+    F2 -- No --> F3
+    F3[Prompt: enter movie hint for Claude] --> F
+    G[Claude: select main title] --> G2
+    G2{Selected?}
+    G2 -- Yes --> H
+    G2 -- No --> G3
+    G3[Prompt: select title number] --> H
+    H[MakeMKV: rip title to local SSD] --> H2
+    H2{Rip succeeded?}
     H2 -- Yes --> I
-    H2 -- No --> H3[Clean up partial file and eject disc]
-    H3 --> H4{Retry or skip?}
-    H4 -- Retry --> H5[Wait for disc re-insert]
-    H5 --> H
-    H4 -- Skip --> Q
+    H2 -- No --> H3
+    H3[Clean up partial file and eject disc] --> C
     I[MKVToolNix: identify audio tracks]
-    I --> J[Claude: select audio tracks to keep]
-    J --> J2{Selected?}
+    I --> J
+    J[Claude: select audio tracks to keep] --> J2
+	J2{Selected?}
     J2 -- Yes --> K
-    J2 -- No --> J3[Prompt: select audio tracks]
-    J3 --> K
+    J2 -- No --> J3
+    J3[Prompt: select audio tracks] --> K
     K[MKVToolNix: filter audio tracks]
-    K --> L{Aspect ratio near 1:1?}
-    L -- Yes --> M[Prompt: correct display dimensions]
-    M --> N
-    L -- No --> N[Wait for previous copy job]
-    N --> O[Create destination folder and NFO]
-    O --> P[Start background copy job]
-    P --> Q[Eject disc]
-    Q --> C
-
-    P -. runs concurrently with next rip .-> S[/Copy MKV to destination/]
-    S -. completes before next Step 4 .-> N
+    K --> L
+	L{Check aspect ratio}
+    L -- Correct --> N
+    L -- Incorrect --> M
+    M[Prompt: correct display dimensions] --> N
+    N[Wait for previous copy job] --> O
+    O[Create destination folder and NFO] --> P
+    P[Start background copy job] .-> S
+    P --> Q
+	S[/Copy MKV to destination/] .-> N
+    Q[Eject disc] --> C
 ```
 
 ## Audio selection rules
