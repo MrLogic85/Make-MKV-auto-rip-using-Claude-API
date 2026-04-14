@@ -43,6 +43,20 @@ function Invoke-Claude($prompt) {
     }
 }
 
+function Wait-CopyJob {
+    if ($script:copyJob) {
+        Write-Log "Waiting for background copy to complete..."
+        $result = Receive-Job -Job $script:copyJob -Wait -AutoRemoveJob
+        foreach ($msg in $result.Messages) { Write-Log $msg }
+        if ($result.Success) {
+            Write-Log "Copy complete. Size: $($result.FileSize) GB"
+        } else {
+            Write-Log "Background copy failed. Check log for details."
+        }
+        $script:copyJob = $null
+    }
+}
+
 function New-Title {
     return @{
         Size           = 0
@@ -85,6 +99,7 @@ if ($defaultDestRoots.Count -eq 0) {
 }
 
 $lastDiscName = $null
+$copyJob      = $null
 while ($true) {
 
     $movieName = $null
@@ -98,6 +113,7 @@ while ($true) {
 
     if (-not $driveFound) {
         Write-Log "Error: No disc found in drive 0. Please insert disc and try again."
+        Wait-CopyJob
         exit
     }
 
@@ -114,6 +130,7 @@ while ($true) {
 
     if ($discName -and $discName -eq $lastDiscName) {
         Write-Log "WARNING: Same disc detected ('$discName'). Please insert a different disc. Exiting."
+        Wait-CopyJob
         exit
     }
 
@@ -314,6 +331,7 @@ $($titleLines -join "`n")
 
     if (-not $generatedMkv) {
         Write-Log "Error: Could not find ripped MKV file. Exiting."
+        Wait-CopyJob
         exit
     }
 
@@ -330,6 +348,7 @@ $($titleLines -join "`n")
         $mkvJson = $identifyOutput | ConvertFrom-Json
     } catch {
         Write-Log "Error: Failed to parse MKVToolNix JSON output: $_. Exiting."
+        Wait-CopyJob
         exit
     }
 
@@ -337,6 +356,7 @@ $($titleLines -join "`n")
 
     if (-not $mkvAudioTracks) {
         Write-Log "Error: No audio tracks found in MKV. Exiting."
+        Wait-CopyJob
         exit
     }
 
@@ -420,6 +440,7 @@ $($trackLines -join "`n")
         Write-Log "Removed temporary MKV."
     } else {
         Write-Log "Error: MKVToolNix failed (exit code $LASTEXITCODE). Temporary MKV kept at: $tempMkv"
+        Wait-CopyJob
         exit
     }
 
@@ -490,10 +511,13 @@ $($trackLines -join "`n")
     }
 
     # -------------------------------------------------------------------------
-    # Step 4: Copy to destination
+    # Step 4: Copy to destination (background job)
     # -------------------------------------------------------------------------
     Write-Log ""
-    Write-Log "Step 4: Copying to destination..."
+    Write-Log "Step 4: Starting copy to destination in background..."
+
+    # Wait for the previous disc's copy to finish before starting a new one
+    Wait-CopyJob
 
     if (-not (Test-Path $movieFolder)) {
         New-Item -ItemType Directory -Path $movieFolder | Out-Null
@@ -512,25 +536,26 @@ $($trackLines -join "`n")
         Write-Log "Created NFO with source: Blu-ray"
     }
 
-    try {
-        Copy-Item -Path $localFinalMkv -Destination $finalMkv -Force
-    } catch {
-        Write-Log "Error: Failed to copy MKV to destination: $_"
-        Remove-Item -Path $localFinalMkv -ErrorAction SilentlyContinue
-        exit
-    }
-    Remove-Item -Path $localFinalMkv
-    Write-Log "Copied MKV to: $finalMkv"
+    $script:copyJob = Start-Job -ScriptBlock {
+        param($src, $dst)
+        try {
+            Copy-Item -Path $src -Destination $dst -Force
+            Remove-Item -Path $src
+            $fileSize = [math]::Round((Get-Item $dst).Length / 1GB, 2)
+            return @{ Success = $true; FileSize = $fileSize; Messages = @("Copied MKV to: $dst") }
+        } catch {
+            Remove-Item -Path $src -ErrorAction SilentlyContinue
+            return @{ Success = $false; FileSize = 0; Messages = @("Error: Failed to copy MKV to destination: $_") }
+        }
+    } -ArgumentList $localFinalMkv, $finalMkv
 
-    $fileSize    = [math]::Round((Get-Item $finalMkv).Length / 1GB, 2)
-    $keptTracks  = $mkvAudioTracks | Where-Object { $keepIds -contains "$($_.id)" }
+    $keptTracks   = $mkvAudioTracks | Where-Object { $keepIds -contains "$($_.id)" }
     $audioSummary = ($keptTracks | ForEach-Object { "$($_.codec)[$($_.properties.language)]" }) -join ", "
 
     Write-Log ""
     Write-Log "=== DONE ==="
     Write-Log "Movie: $movieName"
     Write-Log "Audio: $audioSummary"
-    Write-Log "Size: $fileSize GB"
     Write-Log "Location: $finalMkv"
     Write-Log "Log saved to: $logFile"
 
