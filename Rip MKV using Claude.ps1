@@ -241,24 +241,26 @@ while ($true) {
     # -------------------------------------------------------------------------
 
     # Try to read human-readable title from the standard Blu-ray metadata file
-    $bdmtTitle = $null
+    $bdmtTitle   = $null
+    $volumeLabel = $null
     if ($driveLetter) {
+        try { $volumeLabel = [System.IO.DriveInfo]::new($driveLetter).VolumeLabel } catch {}
+
         $bdmtPath = Join-Path $driveLetter "BDMV\META\DL\bdmt_eng.xml"
         if (Test-Path $bdmtPath) {
             try {
-                $bdmtXml   = [xml](Get-Content $bdmtPath -Encoding UTF8)
-                $bdmtTitle = $bdmtXml.disclib.discinfo.title.name
-                if (-not $bdmtTitle) { $bdmtTitle = $bdmtXml.disclib.discinfo.name }
+                $bdmtXml  = [xml](Get-Content $bdmtPath -Encoding UTF8)
+                $nameNode = $bdmtXml.SelectSingleNode("//*[local-name()='name']")
+                $bdmtTitle = if ($nameNode) { $nameNode.InnerText.Trim() } else { $null }
                 if ($bdmtTitle) { Write-Log "Disc metadata title: $bdmtTitle" }
             } catch {
                 Write-Log "Could not read disc metadata XML. Falling back to disc name."
             }
-        } else {
-			Write-Log "Could not locate disc metadata XML from BDMV\META\DL\bdmt_eng.xml"
-	    }
+        }
     }
 
-    $discIdentifier = if ($bdmtTitle) { $bdmtTitle } else { $discName }
+    $discIdentifier = if ($bdmtTitle) { $bdmtTitle } elseif ($volumeLabel) { $volumeLabel } else { $discName }
+    if ($volumeLabel) { Write-Log "Drive volume label: $volumeLabel" }
 
     do {
         Write-Log "Asking Claude to identify: $discIdentifier"
