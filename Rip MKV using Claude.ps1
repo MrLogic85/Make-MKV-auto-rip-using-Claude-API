@@ -361,34 +361,37 @@ while ($true) {
 The following information was collected from a Blu-ray disc:
 $($discInfoLines -join "`n")$bdmtSection$titlesSection$hintSection
 
-Please identify the movie and format it exactly as: Movie Name (Year)
-For example: The Dark Knight (2008)
-Make sure the name matches the title on https://www.themoviedb.org/
+Please identify the movie, its edition, and the title number of the main feature.
 
-Also identify the edition or version if this is a special cut of the film. Only specify an edition if you are confident it differs from the standard release. You should preferably pick from this list:
-- Collectors Edition
-- Criterion Collection
-- Director's Cut
-- Extended Edition
-- Final Edition
-- IMAX
-- Open Matte
-- Remastered
-- Special Edition
-- Superduper Cut
-- Theatrical Edition
-- Ultimate Edition
-- Uncut
-- Unrated
+1. Identify the movie and format it exactly as: Movie Name (Year)
+   Make sure the name matches the title on https://www.themoviedb.org/
 
-The edition can sometimes be derived from the length of the movie, but only do so if confidet.
+2. Identify the edition or version if this is a special cut. Only specify an edition if you are confident it differs from the standard release. The edition can sometimes be derived from the length of the movie compared to the known theatrical runtime, but only do so if confident. Pick from this list:
+   - Collectors Edition
+   - Criterion Collection
+   - Director's Cut
+   - Extended Edition
+   - Final Edition
+   - IMAX
+   - Open Matte
+   - Remastered
+   - Special Edition
+   - Superduper Cut
+   - Theatrical Edition
+   - Ultimate Edition
+   - Uncut
+   - Unrated
+
+3. Select the title number of the main feature film from the disc titles above. Consider the expected runtime and ignore bonus features, trailers, commentary tracks and short clips.
 
 Return your answers on separate lines:
 NAME:Movie Name (Year)
 EDITION:edition name
+TITLE:number
 If you cannot identify the movie with high confidence, return: NAME:UNKNOWN
 If this is the standard version or you cannot determine the edition, return: EDITION:NONE
-The formatting is important since I will parse your response with these regexes: NAME:(.+) and EDITION:(.+)
+If you cannot determine the main feature title with confidence, return: TITLE:UNKNOWN
+The formatting is important since I will parse your response with these regexes: NAME:(.+), EDITION:(.+) and TITLE:(\w+)
 
 Important: Do not use special Unicode characters like checkmarks or cross marks in your response. Use plain text only.
 "@
@@ -398,21 +401,13 @@ Important: Do not use special Unicode characters like checkmarks or cross marks 
         if ($titlesSection)      { Write-Log "  + $($titleLines.Count) titles" }
         if ($discImages.Count)   { Write-Log "  + $($discImages.Count) image(s)" }
         if ($userHint)           { Write-Log "  + user hint: $userHint" }
-        Write-Log "Asking Claude to identify disc..."
-        $claudeNameResponse = Invoke-Claude $namePrompt $discImages
-        Write-Log "Claude name response: $claudeNameResponse"
+        Write-Log "Asking Claude to identify disc, edition and title..."
+        $claudeResponse = Invoke-Claude $namePrompt $discImages
+        Write-Log "Claude response: $claudeResponse"
 
-        $nameMatch = if ($claudeNameResponse) {
-            [regex]::Match($claudeNameResponse, 'NAME:(.+)')
-        } else {
-            [regex]::Match('', 'NAME:(.+)')
-        }
-
-        $editionMatch = if ($claudeNameResponse) {
-            [regex]::Match($claudeNameResponse, 'EDITION:(.+)')
-        } else {
-            [regex]::Match('', 'EDITION:(.+)')
-        }
+        $nameMatch    = if ($claudeResponse) { [regex]::Match($claudeResponse, 'NAME:(.+)') }    else { [regex]::Match('', 'NAME:(.+)') }
+        $editionMatch = if ($claudeResponse) { [regex]::Match($claudeResponse, 'EDITION:(.+)') } else { [regex]::Match('', 'EDITION:(.+)') }
+        $titleMatch   = if ($claudeResponse) { [regex]::Match($claudeResponse, 'TITLE:(\w+)') }  else { [regex]::Match('', 'TITLE:(\w+)') }
 
         if ($editionMatch.Success) {
             $extractedEdition = $editionMatch.Groups[1].Value.Trim()
@@ -460,32 +455,8 @@ Important: Do not use special Unicode characters like checkmarks or cross marks 
     }
 
     # -------------------------------------------------------------------------
-    # Select title via Claude
+    # Select title
     # -------------------------------------------------------------------------
-    Write-Log ""
-    Write-Log "Asking Claude to select best title ($($titleLines.Count) titles)..."
-    $titlePrompt = @"
-I am ripping the Blu-ray movie '$movieName'. Below are the available titles found on the disc. Please identify which title number is the main feature film. Consider the expected runtime of this movie and look for the title that best matches. Ignore bonus features, trailers, commentary tracks and short clips.
-
-Return your answer as: TITLE:number
-For example: TITLE:4
-If you cannot determine the main feature with confidence, return: TITLE:UNKNOWN
-The formatting for the last line is important since I will parse your response with regex: TITLE:(\w+)
-
-Important: Do not use special Unicode characters like checkmarks or cross marks in your response. Use plain text only.
-
-$($titleLines -join "`n")
-"@
-
-    $claudeTitleResponse = Invoke-Claude $titlePrompt
-    Write-Log "Claude title response: $claudeTitleResponse"
-
-    $titleMatch = if ($claudeTitleResponse) {
-        [regex]::Match($claudeTitleResponse, 'TITLE:(\w+)')
-    } else {
-        [regex]::Match('', 'TITLE:(\w+)')
-    }
-
     if ($titleMatch.Success -and $titleMatch.Groups[1].Value -match '^\d+$') {
         $chosenTitle = [int]$titleMatch.Groups[1].Value
         Write-Log "Claude selected title: $chosenTitle"
