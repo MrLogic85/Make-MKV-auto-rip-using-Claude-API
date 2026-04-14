@@ -66,10 +66,10 @@ function Invoke-Menu {
 
     $selected = $Default
     $count    = $Options.Count
+    $esc      = [char]27
 
     Write-Host ""
     Write-Host $Title
-    $menuTop = [Console]::CursorTop
 
     # Initial draw
     for ($i = 0; $i -lt $count; $i++) {
@@ -86,15 +86,13 @@ function Invoke-Menu {
         switch ($key.Key) {
             'UpArrow'   { $selected = ($selected - 1 + $count) % $count }
             'DownArrow' { $selected = ($selected + 1) % $count }
-            'Enter'     {
-                [Console]::SetCursorPosition(0, $menuTop + $count)
-                return $selected
-            }
+            'Enter'     { return $selected }
         }
 
-        # Redraw
-        [Console]::SetCursorPosition(0, $menuTop)
+        # Move cursor up $count lines then redraw each line in place
+        Write-Host "${esc}[$($count)A" -NoNewline
         for ($i = 0; $i -lt $count; $i++) {
+            Write-Host "${esc}[2K" -NoNewline  # clear current line
             if ($i -eq $selected) {
                 Write-Host "  > $($Options[$i])" -ForegroundColor Cyan
             } else {
