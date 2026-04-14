@@ -384,8 +384,8 @@ Also identify the edition or version if this is a special cut of the film. Only 
 Return your answers on separate lines:
 NAME:Movie Name (Year)
 EDITION:edition name
-If you cannot identify the movie with confidence, return: NAME:UNKNOWN
-If this is the standard version, you cannot determine the edition, or none of the listed editions apply, return: EDITION:NONE
+If you cannot identify the movie with high confidence, return: NAME:UNKNOWN
+If this is the standard version or you cannot determine the edition, return: EDITION:NONE
 The formatting is important since I will parse your response with these regexes: NAME:(.+) and EDITION:(.+)
 
 Important: Do not use special Unicode characters like checkmarks or cross marks in your response. Use plain text only.
