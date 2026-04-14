@@ -381,6 +381,8 @@ Also identify the edition or version if this is a special cut of the film. Only 
 - Uncut
 - Unrated
 
+The edition can sometimes be derived from the length of the movie, but only do so if confidet.
+
 Return your answers on separate lines:
 NAME:Movie Name (Year)
 EDITION:edition name
