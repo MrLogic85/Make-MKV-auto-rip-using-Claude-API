@@ -57,6 +57,53 @@ function Wait-CopyJob {
     }
 }
 
+function Invoke-Menu {
+    param(
+        [string]$Title,
+        [string[]]$Options,
+        [int]$Default = 0
+    )
+
+    $selected = $Default
+    $count    = $Options.Count
+
+    Write-Host ""
+    Write-Host $Title
+    $menuTop = [Console]::CursorTop
+
+    # Initial draw
+    for ($i = 0; $i -lt $count; $i++) {
+        if ($i -eq $selected) {
+            Write-Host "  > $($Options[$i])" -ForegroundColor Cyan
+        } else {
+            Write-Host "    $($Options[$i])"
+        }
+    }
+
+    while ($true) {
+        $key = [Console]::ReadKey($true)
+
+        switch ($key.Key) {
+            'UpArrow'   { $selected = ($selected - 1 + $count) % $count }
+            'DownArrow' { $selected = ($selected + 1) % $count }
+            'Enter'     {
+                [Console]::SetCursorPosition(0, $menuTop + $count)
+                return $selected
+            }
+        }
+
+        # Redraw
+        [Console]::SetCursorPosition(0, $menuTop)
+        for ($i = 0; $i -lt $count; $i++) {
+            if ($i -eq $selected) {
+                Write-Host "  > $($Options[$i])" -ForegroundColor Cyan
+            } else {
+                Write-Host "    $($Options[$i])"
+            }
+        }
+    }
+}
+
 function New-Title {
     return @{
         Size           = 0
@@ -82,19 +129,8 @@ if ($defaultDestRoots.Count -eq 0) {
     $destRoot = $defaultDestRoots[0]
     Write-Log "Destination: $destRoot"
 } else {
-    Write-Host ""
-    Write-Host "Select destination:"
-    for ($i = 0; $i -lt $defaultDestRoots.Count; $i++) {
-        $marker = if ($i -eq 0) { " (default)" } else { "" }
-        Write-Host "  $($i + 1): $($defaultDestRoots[$i])$marker"
-    }
-    do {
-        $destChoice = Read-Host "Enter number (press Enter for 1)"
-        if ([string]::IsNullOrWhiteSpace($destChoice)) { $destChoice = "1" }
-        $isValid = $destChoice -match '^\d+$' -and [int]$destChoice -ge 1 -and [int]$destChoice -le $defaultDestRoots.Count
-        if (-not $isValid) { Write-Host "Please enter a number between 1 and $($defaultDestRoots.Count)." }
-    } while (-not $isValid)
-    $destRoot = $defaultDestRoots[[int]$destChoice - 1]
+    $idx      = Invoke-Menu -Title "Select destination:" -Options $defaultDestRoots
+    $destRoot = $defaultDestRoots[$idx]
     Write-Log "Destination: $destRoot"
 }
 
@@ -193,11 +229,8 @@ Important: Do not use special Unicode characters like checkmarks or cross marks 
 
     if (Test-Path $finalMkv) {
         Write-Log "WARNING: MKV already exists at $finalMkv"
-        do {
-            $confirm = Read-Host "Overwrite? (y/n)"
-            if ($confirm -ne 'y' -and $confirm -ne 'n') { Write-Host "Please enter y or n." }
-        } while ($confirm -ne 'y' -and $confirm -ne 'n')
-        if ($confirm -ne 'y') {
+        $idx = Invoke-Menu -Title "File already exists. Overwrite?" -Options @("No, skip this disc", "Yes, overwrite") -Default 0
+        if ($idx -ne 1) {
             Write-Log "Aborted by user."
             continue
         }
@@ -305,14 +338,9 @@ $($titleLines -join "`n")
         Write-Log "Claude selected title: $chosenTitle"
     } else {
         Write-Log "Claude could not determine title. Please select manually."
-        $validTitleNums = $titles.Keys | Where-Object { $titles[$_].AudioTracks.Count -gt 0 }
-        do {
-            Write-Host ""
-            $val     = Read-Host "Enter title number ($($validTitleNums -join ', '))"
-            $isValid = $val -match '^\d+$' -and $validTitleNums -contains [int]$val
-            if (-not $isValid) { Write-Host "Invalid title number. Please try again." }
-        } while (-not $isValid)
-        $chosenTitle = [int]$val
+        $titleKeys   = @($titlesWithAudio | ForEach-Object { $_.Key })
+        $idx         = Invoke-Menu -Title "Select title:" -Options $titleLines
+        $chosenTitle = $titleKeys[$idx]
     }
 
     # -------------------------------------------------------------------------
@@ -459,28 +487,26 @@ $($trackLines -join "`n")
 
             if ($ratio -gt 0.9 -and $ratio -lt 1.1) {
                 Write-Log "WARNING: Display dimensions look wrong ($displayDim, nearly 1:1). Pixel dimensions are $pixelDim."
-                Write-Log "Please check the video manually and select the correct aspect ratio."
-                Write-Host ""
-                Write-Host "Common aspect ratios:"
-                Write-Host "  1: 16:9      (1920x1080)"
-                Write-Host "  2: 2.35:1    (1920x816)"
-                Write-Host "  3: 2.39:1    (1920x803)"
-                Write-Host "  4: 4:3       (1440x1080)"
-                Write-Host "  5: Custom"
-                Write-Host "  6: Keep as is"
-                do {
-                    $arChoice = Read-Host "Select aspect ratio (1-6)"
-                    if ($arChoice -notmatch '^[1-6]$') { Write-Host "Please enter a number between 1 and 6." }
-                } while ($arChoice -notmatch '^[1-6]$')
+                $arIdx = Invoke-Menu `
+                    -Title "Display dimensions look wrong ($displayDim, pixel: $pixelDim). Select aspect ratio:" `
+                    -Options @(
+                        "16:9      (1920x1080)",
+                        "2.35:1    (1920x816)",
+                        "2.39:1    (1920x803)",
+                        "4:3       (1440x1080)",
+                        "Custom",
+                        "Keep as is"
+                    ) `
+                    -Default 5
 
                 $newW = $null
                 $newH = $null
-                switch ($arChoice) {
-                    "1" { $newW = 1920; $newH = 1080 }
-                    "2" { $newW = 1920; $newH = 816 }
-                    "3" { $newW = 1920; $newH = 803 }
-                    "4" { $newW = 1440; $newH = 1080 }
-                    "5" {
+                switch ($arIdx) {
+                    0 { $newW = 1920; $newH = 1080 }
+                    1 { $newW = 1920; $newH = 816 }
+                    2 { $newW = 1920; $newH = 803 }
+                    3 { $newW = 1440; $newH = 1080 }
+                    4 {
                         do {
                             $customW  = Read-Host "Enter display width"
                             $isValidW = $customW -match '^\d+$' -and [int]$customW -gt 0
