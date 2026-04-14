@@ -102,6 +102,51 @@ function Invoke-Menu {
     }
 }
 
+function Invoke-MultiSelectMenu {
+    param(
+        [string]$Title,
+        [string[]]$Options,
+        [bool[]]$Defaults
+    )
+
+    [bool[]]$checked = if ($Defaults) { $Defaults } else { @($false) * $Options.Count }
+    $cursor  = 0
+    $count   = $Options.Count + 1  # +1 for Done
+    $esc     = [char]27
+
+    function Draw-Item($i, $isCursor) {
+        Write-Host "${esc}[2K" -NoNewline
+        if ($i -lt $Options.Count) {
+            $box = if ($checked[$i]) { "x" } else { " " }
+            if ($isCursor) { Write-Host "  > [$box] $($Options[$i])" -ForegroundColor Cyan }
+            else           { Write-Host "    [$box] $($Options[$i])" }
+        } else {
+            if ($isCursor) { Write-Host "  > Done" -ForegroundColor Cyan }
+            else           { Write-Host "    Done" }
+        }
+    }
+
+    Write-Host ""
+    Write-Host $Title
+    for ($i = 0; $i -lt $count; $i++) { Draw-Item $i ($i -eq $cursor) }
+
+    while ($true) {
+        $key = [Console]::ReadKey($true)
+
+        switch ($key.Key) {
+            'UpArrow'   { $cursor = ($cursor - 1 + $count) % $count }
+            'DownArrow' { $cursor = ($cursor + 1) % $count }
+            'Enter'     {
+                if ($cursor -eq $Options.Count) { return $checked }
+                $checked[$cursor] = -not $checked[$cursor]
+            }
+        }
+
+        Write-Host "${esc}[$($count)A" -NoNewline
+        for ($i = 0; $i -lt $count; $i++) { Draw-Item $i ($i -eq $cursor) }
+    }
+}
+
 function New-Title {
     return @{
         Size           = 0
@@ -498,16 +543,26 @@ $($trackLines -join "`n")
     }
 
     if (-not $audioMatch.Success) {
-        Write-Log "Claude could not determine audio tracks. Keeping all tracks."
-        $keepIds = $mkvAudioTracks | ForEach-Object { "$($_.id)" }
+        Write-Log "Claude could not determine audio tracks. Prompting for manual selection."
+        $keepIds = $null
     } else {
-        $keepIds = $audioMatch.Groups[1].Value -split "," | ForEach-Object { $_.Trim() }
+        $keepIds = $audioMatch.Groups[1].Value -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
         Write-Log "Claude selected tracks: $($keepIds -join ', ')"
     }
 
-    if ($keepIds.Count -eq 0) {
-        Write-Log "No track IDs extracted. Keeping all tracks."
-        $keepIds = $mkvAudioTracks | ForEach-Object { "$($_.id)" }
+    if (-not $keepIds -or $keepIds.Count -eq 0) {
+        Write-Log "No track IDs extracted. Prompting for manual selection."
+        $keepIds = $null
+    }
+
+    if (-not $keepIds) {
+        $defaults = @($true) * $mkvAudioTracks.Count
+        $checked  = Invoke-MultiSelectMenu -Title "Select audio tracks to keep:" -Options $trackLines -Defaults $defaults
+        $keepIds  = @()
+        for ($i = 0; $i -lt $mkvAudioTracks.Count; $i++) {
+            if ($checked[$i]) { $keepIds += "$($mkvAudioTracks[$i].id)" }
+        }
+        Write-Log "Manual selection: tracks $($keepIds -join ', ')"
     }
 
     # -------------------------------------------------------------------------
