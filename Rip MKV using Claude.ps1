@@ -232,10 +232,14 @@ while ($true) {
     if ($driveLetter) {
         $bdmtPath = Join-Path $driveLetter "BDMV\META\DL\bdmt_eng.xml"
         if (Test-Path $bdmtPath) {
-            $bdmtXml = [xml](Get-Content $bdmtPath -Encoding UTF8 -ErrorAction SilentlyContinue)
-            $bdmtTitle = $bdmtXml.disclib.discinfo.title.name
-            if (-not $bdmtTitle) { $bdmtTitle = $bdmtXml.disclib.discinfo.name }
-            if ($bdmtTitle) { Write-Log "Disc metadata title: $bdmtTitle" }
+            try {
+                $bdmtXml   = [xml](Get-Content $bdmtPath -Encoding UTF8)
+                $bdmtTitle = $bdmtXml.disclib.discinfo.title.name
+                if (-not $bdmtTitle) { $bdmtTitle = $bdmtXml.disclib.discinfo.name }
+                if ($bdmtTitle) { Write-Log "Disc metadata title: $bdmtTitle" }
+            } catch {
+                Write-Log "Could not read disc metadata XML. Falling back to disc name."
+            }
         }
     }
 
