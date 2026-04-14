@@ -77,10 +77,18 @@ flowchart TD
     F3 --> G
     F2 -- Yes --> G[Claude: select main title]
     G --> G2{Selected?}
-    G2 -- No --> G3[Prompt: enter title number]
+    G2 -- No --> G3[Prompt: select title number]
     G3 --> H
     G2 -- Yes --> H[MakeMKV: rip title to local SSD]
-    H --> I[MKVToolNix: identify audio tracks]
+    H --> H2{Rip succeeded?}
+    H2 -- Yes --> I
+    H2 -- No --> H3[Clean up partial file and eject disc]
+    H3 --> H4{Retry or skip?}
+    H4 -- Retry --> H5[Wait for disc re-insert]
+    H5 --> H
+    H4 -- Skip --> H6[Wait for next disc]
+    H6 --> C
+    I[MKVToolNix: identify audio tracks]
     I --> J[Claude: select audio tracks to keep]
     J --> K[MKVToolNix: filter audio tracks]
     K --> L{Aspect ratio near 1:1?}
@@ -119,6 +127,7 @@ Compatible with [tinyMediaManager](https://www.tinymediamanager.org/) and media 
 ## Notes
 
 - **MPEG-2 aspect ratio bug** – MakeMKV sometimes sets incorrect display dimensions for MPEG-2 video. The script detects near 1:1 aspect ratios and prompts you to pick the correct one.
+- **Rip failure** – if MakeMKV fails mid-rip, the partial file is removed, the disc is ejected, and you are prompted to retry (after cleaning the disc) or skip to the next disc.
 - **BD-Java warning** – some discs require Java for menus. This does not affect ripping and can be ignored.
 - **API cost** – each rip uses approximately 3 Claude API calls (name, title, audio). At current Sonnet pricing this costs a fraction of a cent per disc.
 

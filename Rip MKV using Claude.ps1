@@ -361,21 +361,65 @@ $($titleLines -join "`n")
     Write-Host ""
     Write-Log "Step 1: Ripping title $chosenTitle from disc..."
 
-    $beforeRip = Get-Date
-    $tempMkv   = Join-Path $localTemp "temp_ripping_$([System.Guid]::NewGuid().ToString('N')).mkv"
-    & $makemkvcon mkv disc:0 $chosenTitle "$localTemp"
-    $generatedMkv = Get-ChildItem -Path $localTemp -Filter "*.mkv" |
-        Where-Object { $_.LastWriteTime -gt $beforeRip } |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -First 1
+    $tempMkv = $null
+    $ripDone = $false
+    while (-not $ripDone) {
+        $beforeRip    = Get-Date
+        $tempMkvName  = "temp_ripping_$([System.Guid]::NewGuid().ToString('N')).mkv"
+        $tempMkv      = Join-Path $localTemp $tempMkvName
+        & $makemkvcon mkv disc:0 $chosenTitle "$localTemp"
+        $ripExitCode  = $LASTEXITCODE
 
-    if (-not $generatedMkv) {
-        Write-Log "Error: Could not find ripped MKV file. Exiting."
-        Wait-CopyJob
-        exit
+        $generatedMkv = Get-ChildItem -Path $localTemp -Filter "*.mkv" |
+            Where-Object { $_.LastWriteTime -gt $beforeRip } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+        if ($ripExitCode -ne 0 -or -not $generatedMkv) {
+            Write-Log "Error: Ripping failed (exit code $ripExitCode)."
+
+            # Remove any partial file left behind
+            if ($generatedMkv) {
+                Remove-Item -Path $generatedMkv.FullName -ErrorAction SilentlyContinue
+                Write-Log "Removed partial MKV file."
+            }
+
+            # Eject the disc
+            $driveLine   = $driveFound | Select-Object -First 1
+            $driveLetter = if ($driveLine -match '"([A-Z]:)"') { $matches[1] } else { $null }
+            if ($driveLetter) {
+                Write-Log "Ejecting disc ($driveLetter)..."
+                $shell = New-Object -ComObject Shell.Application
+                $shell.Namespace(17).ParseName($driveLetter).InvokeVerb("Eject")
+            }
+
+            $errIdx = Invoke-Menu `
+                -Title "Ripping failed. Please clean the disc and re-insert it." `
+                -Options @("Retry", "Skip to next disc")
+
+            Write-Log "Waiting for disc..."
+            do {
+                Start-Sleep -Seconds 5
+                $pollOutput = & $makemkvcon -r info disc:0 2>&1
+                $discReady  = $pollOutput | Where-Object { $_ -match '^DRV:0,' -and $_ -notmatch ',256,' }
+            } while (-not $discReady)
+
+            if ($errIdx -eq 0) {
+                # Retry: update driveFound so eject works correctly after a successful rip
+                $driveFound = $discReady
+                Write-Log "Disc detected. Retrying rip..."
+            } else {
+                # Skip: let the outer loop handle the new disc
+                Write-Log "Skipping to next disc."
+                break
+            }
+        } else {
+            Rename-Item -Path $generatedMkv.FullName -NewName $tempMkvName
+            $ripDone = $true
+        }
     }
 
-    Rename-Item -Path $generatedMkv.FullName -NewName (Split-Path $tempMkv -Leaf)
+    if (-not $ripDone) { continue }
 
     # -------------------------------------------------------------------------
     # Step 2: Identify and select audio tracks via Claude
