@@ -56,6 +56,9 @@ if ([string]::IsNullOrWhiteSpace($destRoot)) {
     $destRoot = $defaultDestRoot
 }
 
+while ($true) {
+$movieName = $null
+
 # Find disc
 Write-Log "Scanning for disc..."
 $infoOutput = & $makemkvcon -r info disc:0 2>&1
@@ -133,7 +136,7 @@ if (Test-Path $finalMkv) {
     } while ($confirm -ne 'y' -and $confirm -ne 'n')
     if ($confirm -ne 'y') {
         Write-Log "Aborted by user."
-        exit
+        continue
     }
 }
 
@@ -455,3 +458,5 @@ Write-Log "Audio: $audioSummary"
 Write-Log "Size: $fileSize GB"
 Write-Log "Location: $finalMkv"
 Write-Log "Log saved to: $logFile"
+
+} # end while

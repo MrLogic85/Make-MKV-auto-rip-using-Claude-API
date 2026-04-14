@@ -10,7 +10,7 @@
 
 ## Multi-disc loop
 
-- [ ] **#8 Wrap ripping flow in a loop** — keep the destination prompt outside; wrap everything from disc scan to copy complete in a `while ($true)` loop.
+- [x] **#8 Wrap ripping flow in a loop** — keep the destination prompt outside; wrap everything from disc scan to copy complete in a `while ($true)` loop.
 - [ ] **#9 Eject disc after successful copy** — detect the drive letter from makemkvcon output and eject using Shell.Application.
 - [ ] **#10 Wait for new disc after eject** — poll `makemkvcon -r info disc:0` until a new disc is detected.
 - [ ] **#11 Exit if same disc is re-inserted** — store the disc name after each rip; if the next disc has the same name, warn and exit.
