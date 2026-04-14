@@ -184,7 +184,7 @@ if ($defaultDestRoots.Count -eq 0) {
     $destRoot = $defaultDestRoots[0]
     Write-Log "Destination: $destRoot"
 } else {
-    $idx      = Invoke-Menu -Title "Select destination:" -Options $defaultDestRoots
+    $idx      = Invoke-Menu -Title "Select destination:" -Options $defaultDestRoots -NoBeep
     $destRoot = $defaultDestRoots[$idx]
     Write-Log "Destination: $destRoot"
 }
