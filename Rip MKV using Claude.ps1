@@ -20,7 +20,11 @@ function Write-Log($message) {
 }
 
 function Invoke-Beep {
-    if ($beepOnManualInput) { [Console]::Beep() }
+    if ($beepOnManualInput) {
+        [Console]::Beep(600, 200)
+        Start-Sleep -Milliseconds 100
+        [Console]::Beep(600, 200)
+    }
 }
 
 function Invoke-Claude($prompt) {
@@ -180,7 +184,7 @@ if ($defaultDestRoots.Count -eq 0) {
     $destRoot = $defaultDestRoots[0]
     Write-Log "Destination: $destRoot"
 } else {
-    $idx      = Invoke-Menu -Title "Select destination:" -Options $defaultDestRoots -NoBeep
+    $idx      = Invoke-Menu -Title "Select destination:" -Options $defaultDestRoots
     $destRoot = $defaultDestRoots[$idx]
     Write-Log "Destination: $destRoot"
 }
