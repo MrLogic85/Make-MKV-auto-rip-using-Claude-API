@@ -193,7 +193,8 @@ $lastDiscName = $null
 $copyJob      = $null
 while ($true) {
 
-    $movieName = $null
+    $movieName    = $null
+    $movieEdition = $null
 
     # -------------------------------------------------------------------------
     # Find disc
@@ -269,22 +270,41 @@ Please identify the movie and format it exactly as: Movie Name (Year)
 For example: The Dark Knight (2008)
 Make sure the name matches the title on https://www.themoviedb.org/
 
-Return your answer as: NAME:Movie Name (Year)
+Also identify the edition or version if this is a special cut of the film (e.g. "Director's Cut", "Extended Edition", "The Final Cut", "Theatrical Cut"). Only specify an edition if you are confident it differs from the standard release.
+
+Return your answers on separate lines:
+NAME:Movie Name (Year)
+EDITION:edition name
 If you cannot identify the movie with confidence, return: NAME:UNKNOWN
-The formatting of the last line is important since I will parse your response with regex: NAME:(.+)
+If this is the standard version or you cannot determine the edition, return: EDITION:NONE
+The formatting is important since I will parse your response with these regexes: NAME:(.+) and EDITION:(.+)
 
 Important: Do not use special Unicode characters like checkmarks or cross marks in your response. Use plain text only.
 "@
 
         $claudeNameResponse = Invoke-Claude $namePrompt
         Write-Log "Claude name response: $claudeNameResponse"
-    
+
         $nameMatch = if ($claudeNameResponse) {
             [regex]::Match($claudeNameResponse, 'NAME:(.+)')
         } else {
             [regex]::Match('', 'NAME:(.+)')
         }
-    
+
+        $editionMatch = if ($claudeNameResponse) {
+            [regex]::Match($claudeNameResponse, 'EDITION:(.+)')
+        } else {
+            [regex]::Match('', 'EDITION:(.+)')
+        }
+
+        if ($editionMatch.Success) {
+            $extractedEdition = $editionMatch.Groups[1].Value.Trim()
+            if ($extractedEdition -ne "NONE") {
+                $movieEdition = $extractedEdition
+                Write-Log "Claude identified edition: $movieEdition"
+            }
+        }
+
         if ($nameMatch.Success) {
             $extractedName = $nameMatch.Groups[1].Value.Trim()
             if ($extractedName -ne "UNKNOWN" -and $extractedName -match '.+\(\d{4}\)') {
@@ -695,14 +715,16 @@ $($trackLines -join "`n")
 
     $nfoPath = Join-Path $movieFolder "$movieName.nfo"
     if (-not (Test-Path $nfoPath)) {
-        $nfoContent = @"
+        $editionTag  = if ($movieEdition) { "`n    <edition>$movieEdition</edition>" } else { "" }
+        $nfoContent  = @"
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <movie>
-    <source>Blu-ray</source>
+    <source>Blu-ray</source>$editionTag
 </movie>
 "@
         [System.IO.File]::WriteAllText($nfoPath, $nfoContent, [System.Text.Encoding]::UTF8)
-        Write-Log "Created NFO with source: Blu-ray"
+        $editionLog = if ($movieEdition) { ", edition: $movieEdition" } else { "" }
+        Write-Log "Created NFO with source: Blu-ray$editionLog"
     }
 
     $script:copyJob = Start-Job -ScriptBlock {
