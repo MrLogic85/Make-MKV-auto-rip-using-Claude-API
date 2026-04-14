@@ -224,8 +224,28 @@ while ($true) {
     # -------------------------------------------------------------------------
     # Identify movie name via Claude
     # -------------------------------------------------------------------------
+
+    # Extract title durations and sizes from disc info to help Claude identify the movie
+    $discTitleSummary = @()
+    foreach ($line in $infoOutput) {
+        if ($line -match '^TINFO:(\d+),9,0,"([^"]+)"') {
+            $discTitleSummary += "Title $($matches[1]): duration $($matches[2])"
+        }
+        if ($line -match '^TINFO:(\d+),11,0,"(\d+)"') {
+            $sizeGb = [math]::Round([long]$matches[2] / 1GB, 1)
+            $idx    = [int]$matches[1]
+            $entry  = $discTitleSummary | Where-Object { $_ -match "^Title $idx`:" }
+            if ($entry) {
+                $discTitleSummary[$discTitleSummary.IndexOf($entry)] += ", size ${sizeGb} GB"
+            }
+        }
+    }
+    $discTitleSection = if ($discTitleSummary.Count -gt 0) {
+        "`n`nDisc titles:`n" + ($discTitleSummary -join "`n")
+    } else { "" }
+
     $namePrompt = @"
-The following is a Blu-ray disc name: "$discName"
+The following is a Blu-ray disc name: "$discName"$discTitleSection
 
 Please identify the movie and format it exactly as: Movie Name (Year)
 For example: The Dark Knight (2008)
