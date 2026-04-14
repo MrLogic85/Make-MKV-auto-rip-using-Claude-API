@@ -277,16 +277,18 @@ while ($true) {
         if ($discImages.Count -gt 0) { Write-Log "Found $($discImages.Count) disc thumbnail(s)." }
     }
 
-    $discIdentifier = if ($volumeLabel) { $volumeLabel } else { $discName }
     if ($volumeLabel) { Write-Log "Drive volume label: $volumeLabel" }
 
     do {
-        Write-Log "Asking Claude to identify: $discIdentifier"
-    	
-        $bdmtSection = if ($bdmtXml) { "`n`nDisc metadata XML:`n$bdmtXml" } else { "" }
+        Write-Log "Asking Claude to identify disc..."
+
+        $discInfoLines  = @("MakeMKV disc name: $discName")
+        if ($volumeLabel) { $discInfoLines += "Drive volume label: $volumeLabel" }
+        $bdmtSection    = if ($bdmtXml) { "`n`nDisc metadata XML:`n$bdmtXml" } else { "" }
 
         $namePrompt = @"
-The following is a Blu-ray disc identifier: "$discIdentifier"$bdmtSection
+The following information was collected from a Blu-ray disc:
+$($discInfoLines -join "`n")$bdmtSection
 
 Please identify the movie and format it exactly as: Movie Name (Year)
 For example: The Dark Knight (2008)
