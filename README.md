@@ -1,6 +1,6 @@
-﻿# Rip MKV using Claude
+# Rip MKV using Claude
 
-A PowerShell script that rips a Blu-ray disc to MKV, intelligently selects the correct title and audio tracks using the Claude API, and copies the result to any destination folder.
+A PowerShell script that rips Blu-ray discs to MKV, intelligently selects the correct title and audio tracks using the Claude API, and copies the result to any destination folder. Supports back-to-back ripping — ejects each disc when done and waits for the next one automatically.
 
 ## Features
 
@@ -10,6 +10,7 @@ A PowerShell script that rips a Blu-ray disc to MKV, intelligently selects the c
 - **Native language preservation** – always keeps the film's original language even if not in the preferred list
 - **Aspect ratio check** – detects broken display dimensions (e.g. 1:1 square video) and prompts for correction
 - **Local SSD temp storage** – rips to a local SSD first before copying to the destination, avoiding slow network write speeds
+- **Multi-disc loop** – ejects the disc after ripping and waits for the next one; exits if the same disc is re-inserted
 - **NFO source tag** – writes a minimal NFO for media managers like tinyMediaManager
 
 ## Requirements
@@ -37,32 +38,47 @@ $mkvpropedit             = "C:\Program Files\MKVToolNix\mkvpropedit.exe"
 
 > **Important:** Never commit `config.ps1` – it contains your API key. It is listed in `.gitignore`.
 
+### Destination folders
+
+`$defaultDestRoots` is an array of destination paths:
+- **One entry** – used automatically without prompting
+- **Multiple entries** – a numbered list is shown at startup; press Enter to use the first one
+- **Empty** – script exits with an error
+
+> **Tip:** If your destination is a NAS, mount it as a network drive and add the drive letter to `$defaultDestRoots`. The script rips to local SSD first to avoid slow network writes during the MakeMKV step.
+
 ## Usage
 
-1. Insert the Blu-ray disc
+1. Insert the first Blu-ray disc
 2. Run the script from PowerShell:
 ```powershell
 & '.\Rip MKV using Claude.ps1'
 ```
-3. Confirm or enter the destination folder (default from config)
-4. The script runs automatically from here – Claude identifies the movie, selects the best title and filters audio tracks
+3. Select the destination folder if multiple are configured
+4. The script runs automatically – Claude identifies the movie, selects the best title and filters audio tracks
 5. If Claude cannot determine something with confidence you are prompted to select manually
+6. When done, the disc is ejected and the script waits for the next one
 
 ## Workflow
 
 ```mermaid
 flowchart TD
-    A[Disc] --> B[MakeMKV: identify disc and available titles]
-    B --> C[Claude API: identify movie name from disc metadata]
-    C --> D[Claude API: select main feature title]
-    D --> E[MakeMKV: rip selected title to local SSD]
-    E --> F[MKVToolNix: identify audio tracks in ripped MKV]
-    F --> G[Claude API: select audio tracks to keep]
-    G --> H[MKVToolNix: filter audio tracks]
-    H --> I{Aspect ratio OK?}
-    I -- No --> J[Prompt user to correct display dimensions]
-    J --> K[Destination: create folder, write NFO, copy MKV]
-    I -- Yes --> K
+    A[Start] --> B[Select destination]
+    B --> C[Insert disc]
+    C --> D[MakeMKV: identify disc and available titles]
+    D --> E[Claude API: identify movie name from disc metadata]
+    E --> F[Claude API: select main feature title]
+    F --> G[MakeMKV: rip selected title to local SSD]
+    G --> H[MKVToolNix: identify audio tracks in ripped MKV]
+    H --> I[Claude API: select audio tracks to keep]
+    I --> J[MKVToolNix: filter audio tracks]
+    J --> K{Aspect ratio OK?}
+    K -- No --> L[Prompt user to correct display dimensions]
+    L --> M[Copy to destination, write NFO]
+    K -- Yes --> M
+    M --> N[Eject disc]
+    N --> O[Wait for next disc]
+    O --> D
 ```
 
 ## Audio selection rules
@@ -83,8 +99,6 @@ Movies are saved as:
 ```
 
 Compatible with [tinyMediaManager](https://www.tinymediamanager.org/) and media players like Zidoo that use NFO metadata.
-
-> **Tip:** If your destination is a NAS, mount it as a network drive and set `$defaultDestRoot` to that drive letter. The script rips to local SSD first to avoid slow network writes during the MakeMKV step.
 
 ## Notes
 
