@@ -240,33 +240,18 @@ while ($true) {
             } catch {
                 Write-Log "Could not read disc metadata XML. Falling back to disc name."
             }
-        }
+        } else {
+			Write-Log "Could not locate disc metadata XML from BDMV\META\DL\bdmt_eng.xml"
+	    }
     }
-
-    # Extract title durations and sizes from disc info to help Claude identify the movie
-    $discTitleSummary = @()
-    foreach ($line in $infoOutput) {
-        if ($line -match '^TINFO:(\d+),9,0,"([^"]+)"') {
-            $discTitleSummary += "Title $($matches[1]): duration $($matches[2])"
-        }
-        if ($line -match '^TINFO:(\d+),11,0,"(\d+)"') {
-            $sizeGb = [math]::Round([long]$matches[2] / 1GB, 1)
-            $idx    = [int]$matches[1]
-            $entry  = $discTitleSummary | Where-Object { $_ -match "^Title $idx`:" }
-            if ($entry) {
-                $discTitleSummary[$discTitleSummary.IndexOf($entry)] += ", size ${sizeGb} GB"
-            }
-        }
-    }
-    $discTitleSection = if ($discTitleSummary.Count -gt 0) {
-        "`n`nDisc titles:`n" + ($discTitleSummary -join "`n")
-    } else { "" }
 
     $discIdentifier = if ($bdmtTitle) { $bdmtTitle } else { $discName }
-    Write-Log "Asking Claude to identify: $discIdentifier"
 
-    $namePrompt = @"
-The following is a Blu-ray disc identifier: "$discIdentifier"$discTitleSection
+    do {
+        Write-Log "Asking Claude to identify: $discIdentifier"
+    	
+        $namePrompt = @"
+The following is a Blu-ray disc identifier: "$discIdentifier"
 
 Please identify the movie and format it exactly as: Movie Name (Year)
 For example: The Dark Knight (2008)
@@ -279,36 +264,33 @@ The formatting of the last line is important since I will parse your response wi
 Important: Do not use special Unicode characters like checkmarks or cross marks in your response. Use plain text only.
 "@
 
-    $claudeNameResponse = Invoke-Claude $namePrompt
-    Write-Log "Claude name response: $claudeNameResponse"
-
-    $nameMatch = if ($claudeNameResponse) {
-        [regex]::Match($claudeNameResponse, 'NAME:(.+)')
-    } else {
-        [regex]::Match('', 'NAME:(.+)')
-    }
-
-    if ($nameMatch.Success) {
-        $extractedName = $nameMatch.Groups[1].Value.Trim()
-        if ($extractedName -ne "UNKNOWN" -and $extractedName -match '.+\(\d{4}\)') {
-            $movieName = $extractedName
-            Write-Log "Claude identified movie: $movieName"
+        $claudeNameResponse = Invoke-Claude $namePrompt
+        Write-Log "Claude name response: $claudeNameResponse"
+    
+        $nameMatch = if ($claudeNameResponse) {
+            [regex]::Match($claudeNameResponse, 'NAME:(.+)')
         } else {
-            Write-Log "Claude could not identify movie from disc name."
+            [regex]::Match('', 'NAME:(.+)')
         }
-    } else {
-        Write-Log "Claude returned unexpected response for movie name."
-    }
-
-    # Fall back to manual input if needed
-    if (-not $movieName) {
-        do {
+    
+        if ($nameMatch.Success) {
+            $extractedName = $nameMatch.Groups[1].Value.Trim()
+            if ($extractedName -ne "UNKNOWN" -and $extractedName -match '.+\(\d{4}\)') {
+                $movieName = $extractedName
+                Write-Log "Claude identified movie: $movieName"
+            } else {
+                Write-Log "Claude could not identify movie from disc name."
+            }
+        } else {
+            Write-Log "Claude returned unexpected response for movie name."
+        }
+    
+        # Fall back to manual input if needed
+        if (-not $movieName) {
             Write-Host ""
-            $movieName = Read-Host "Enter movie name and year (e.g. Inception (2010))"
-            $isValid = $movieName -match '.+\(\d{4}\)'
-            if (-not $isValid) { Write-Host "Invalid format. Use: Movie Name (Year)" }
-        } while (-not $isValid)
-    }
+            $discIdentifier = Read-Host "Enter movie hint for Claude"
+        }
+    } while (-not $movieName)
 
     $movieName = $movieName -replace ':', ' -' -replace '"', "'" -replace '[\\/*?<>|]', ''
     $movieName = $movieName -replace '\s{2,}', ' '
