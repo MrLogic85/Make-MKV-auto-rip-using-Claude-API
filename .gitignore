@@ -1,4 +1,4 @@
 config.ps1
 rip_log_*.txt
-cleanup_*.mkv
+*.mkv
 .claude/
