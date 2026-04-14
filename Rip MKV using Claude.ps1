@@ -432,6 +432,7 @@ $($titleLines -join "`n")
         $mkvJson = $identifyOutput | ConvertFrom-Json
     } catch {
         Write-Log "Error: Failed to parse MKVToolNix JSON output: $_. Exiting."
+        Remove-Item -Path $tempMkv -ErrorAction SilentlyContinue
         Wait-CopyJob
         exit
     }
@@ -440,6 +441,7 @@ $($titleLines -join "`n")
 
     if (-not $mkvAudioTracks) {
         Write-Log "Error: No audio tracks found in MKV. Exiting."
+        Remove-Item -Path $tempMkv -ErrorAction SilentlyContinue
         Wait-CopyJob
         exit
     }
@@ -523,7 +525,9 @@ $($trackLines -join "`n")
         Remove-Item -Path $tempMkv
         Write-Log "Removed temporary MKV."
     } else {
-        Write-Log "Error: MKVToolNix failed (exit code $LASTEXITCODE). Temporary MKV kept at: $tempMkv"
+        Write-Log "Error: MKVToolNix failed (exit code $LASTEXITCODE)."
+        Remove-Item -Path $tempMkv -ErrorAction SilentlyContinue
+        Remove-Item -Path $localFinalMkv -ErrorAction SilentlyContinue
         Wait-CopyJob
         exit
     }
