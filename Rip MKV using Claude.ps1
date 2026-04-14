@@ -195,6 +195,7 @@ while ($true) {
 
     $movieName    = $null
     $movieEdition = $null
+    $bdmtXml      = $null
 
     # -------------------------------------------------------------------------
     # Find disc
@@ -249,24 +250,24 @@ while ($true) {
         $bdmtPath = Join-Path $driveLetter "BDMV\META\DL\bdmt_eng.xml"
         if (Test-Path $bdmtPath) {
             try {
-                $bdmtXml  = [xml](Get-Content $bdmtPath -Encoding UTF8)
-                $nameNode = $bdmtXml.SelectSingleNode("//*[local-name()='name']")
-                $bdmtTitle = if ($nameNode) { $nameNode.InnerText.Trim() } else { $null }
-                if ($bdmtTitle) { Write-Log "Disc metadata title: $bdmtTitle" }
+                $bdmtXml = Get-Content $bdmtPath -Encoding UTF8 -Raw
+                Write-Log "Read disc metadata XML."
             } catch {
-                Write-Log "Could not read disc metadata XML. Falling back to disc name."
+                Write-Log "Could not read disc metadata XML."
             }
         }
     }
 
-    $discIdentifier = if ($bdmtTitle) { $bdmtTitle } elseif ($volumeLabel) { $volumeLabel } else { $discName }
+    $discIdentifier = if ($volumeLabel) { $volumeLabel } else { $discName }
     if ($volumeLabel) { Write-Log "Drive volume label: $volumeLabel" }
 
     do {
         Write-Log "Asking Claude to identify: $discIdentifier"
     	
+        $bdmtSection = if ($bdmtXml) { "`n`nDisc metadata XML:`n$bdmtXml" } else { "" }
+
         $namePrompt = @"
-The following is a Blu-ray disc identifier: "$discIdentifier"
+The following is a Blu-ray disc identifier: "$discIdentifier"$bdmtSection
 
 Please identify the movie and format it exactly as: Movie Name (Year)
 For example: The Dark Knight (2008)
