@@ -3,6 +3,24 @@
 # All config variables ($claudeApiKey, $beepOnManualInput, $preferredAudioLanguages,
 # $mkvmerge, $mkvpropedit, $localTemp, $logFile) are read from the caller's scope.
 
+# Shows a destination selection menu built from $defaultDestRoots plus an "Other..."
+# option. Returns the chosen path.
+function Select-Destination {
+    $options = @($defaultDestRoots) + "Other..."
+    $idx     = Invoke-Menu -Title "Select destination:" -Options $options -NoBeep
+
+    if ($idx -eq $defaultDestRoots.Count) {
+        Invoke-Beep
+        $path = Read-Host "Enter destination folder path"
+        Write-Log "Destination: $path"
+        return $path
+    }
+
+    $path = $defaultDestRoots[$idx]
+    Write-Log "Destination: $path"
+    return $path
+}
+
 function Write-Log($message) {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $line = "[$timestamp] $message"

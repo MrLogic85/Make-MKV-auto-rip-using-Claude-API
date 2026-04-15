@@ -22,14 +22,8 @@ if (-not (Test-Path $mkvmerge))   { Write-Log "Error: MKVToolNix not found at $m
 if ($defaultDestRoots.Count -eq 0) {
     Write-Host "Error: No destinations configured. Please add at least one entry to `$defaultDestRoots in config.ps1."
     exit
-} elseif ($defaultDestRoots.Count -eq 1) {
-    $destRoot = $defaultDestRoots[0]
-    Write-Log "Destination: $destRoot"
-} else {
-    $idx      = Invoke-Menu -Title "Select destination:" -Options $defaultDestRoots -NoBeep
-    $destRoot = $defaultDestRoots[$idx]
-    Write-Log "Destination: $destRoot"
 }
+$destRoot = Select-Destination
 
 $lastDiscName = $null
 $copyJob      = $null
