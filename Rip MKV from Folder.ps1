@@ -18,18 +18,14 @@ if (-not (Test-Path $localTemp)) { New-Item -ItemType Directory -Path $localTemp
 if (-not (Test-Path $makemkvcon)) { Write-Log "Error: MakeMKV not found at $makemkvcon"; exit }
 if (-not (Test-Path $mkvmerge))   { Write-Log "Error: MKVToolNix not found at $mkvmerge"; exit }
 
-# Select source folder
-if ($defaultSourceRoots.Count -eq 0) {
-    Write-Host "Error: No source folders configured. Please add at least one entry to `$defaultSourceRoots in config.ps1."
+# Prompt for source folder
+Invoke-Beep
+$sourceRoot = Read-Host "Enter source folder path"
+if (-not (Test-Path $sourceRoot)) {
+    Write-Host "Error: Source folder not found: $sourceRoot"
     exit
-} elseif ($defaultSourceRoots.Count -eq 1) {
-    $sourceRoot = $defaultSourceRoots[0]
-    Write-Log "Source: $sourceRoot"
-} else {
-    $idx        = Invoke-Menu -Title "Select source folder:" -Options $defaultSourceRoots -NoBeep
-    $sourceRoot = $defaultSourceRoots[$idx]
-    Write-Log "Source: $sourceRoot"
 }
+Write-Log "Source: $sourceRoot"
 
 # Select destination folder
 if ($defaultDestRoots.Count -eq 0) {

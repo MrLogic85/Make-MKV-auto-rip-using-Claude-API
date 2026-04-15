@@ -5,9 +5,6 @@ $defaultDestRoots = @("C:\Movies", "D:\Movies")
 $preferredAudioLanguages = @("eng", "swe")
 $beepOnManualInput = $true
 
-# Folder script: root folder(s) containing BDMV subfolders to process
-$defaultSourceRoots = @("C:\BDMVRips")
-
 $makemkvcon = "C:\Program Files (x86)\MakeMKV\makemkvcon.exe"
 $mkvmerge = "C:\Program Files\MKVToolNix\mkvmerge.exe"
 $mkvpropedit = "C:\Program Files\MKVToolNix\mkvpropedit.exe"

@@ -37,7 +37,6 @@ Two PowerShell scripts for ripping Blu-ray content to MKV. Both use the Claude A
 $claudeApiKey            = "sk-ant-YOUR_KEY_HERE"
 $localTemp               = "C:\TempDir"
 $defaultDestRoots        = @("C:\Movies", "D:\Movies")
-$defaultSourceRoots      = @("C:\BDMVRips")      # folder script only
 $preferredAudioLanguages = @("eng", "swe")
 $beepOnManualInput       = $true
 $makemkvcon              = "C:\Program Files (x86)\MakeMKV\makemkvcon.exe"
@@ -56,13 +55,9 @@ $mkvpropedit             = "C:\Program Files\MKVToolNix\mkvpropedit.exe"
 
 > **Tip:** If your destination is a NAS, mount it as a network drive and add the drive letter to `$defaultDestRoots`. The script rips to local SSD first to avoid slow network writes during the MakeMKV step.
 
-### Source folders (folder script only)
+### Source folder (folder script only)
 
-`$defaultSourceRoots` is an array of paths that contain BDMV subfolders:
-- **One entry** – used automatically without prompting
-- **Multiple entries** – an arrow key menu is shown at startup
-
-Each immediate subfolder of the selected root that contains a `BDMV\` directory is treated as one disc to process.
+The source folder is entered manually each time the script starts. Each immediate subfolder of the entered path that contains a `BDMV\` directory is treated as one disc to process.
 
 ## Usage
 
