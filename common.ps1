@@ -65,6 +65,13 @@ function Write-DoneSummary($audioResult, $movieName, $finalMkv) {
     Write-Log "Log saved to: $logFile"
 }
 
+function Get-DiscSource($resolution) {
+    $pixels = if ($resolution -match '^(\d+)x(\d+)$') { [int]$Matches[1] * [int]$Matches[2] } else { 0 }
+    if     ($pixels -ge 8000000) { return "UHD_BLURAY" }
+    elseif ($pixels -le 500000)  { return "DVD" }
+    else                         { return "BLURAY" }
+}
+
 function Write-Log($message) {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $line = "[$timestamp] $message"
@@ -522,7 +529,7 @@ function Invoke-FilterAudio($tempMkv, $keepIds, $movieName) {
     $localFinalMkv = Join-Path $localTemp "$movieName.mkv"
     $audioArg      = $keepIds -join ","
 
-    & $mkvmerge -o "$localFinalMkv" --audio-tracks $audioArg "$tempMkv"
+    & $mkvmerge -o "$localFinalMkv" --audio-tracks $audioArg "$tempMkv" | Out-Host
 
     if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 1) {
         Remove-Item -Path $tempMkv
@@ -586,7 +593,7 @@ function Invoke-FilterAudio($tempMkv, $keepIds, $movieName) {
                 }
 
                 if ($newW -and $newH) {
-                    & $mkvpropedit "$localFinalMkv" --edit track:v1 --set display-width=$newW --set display-height=$newH
+                    & $mkvpropedit "$localFinalMkv" --edit track:v1 --set display-width=$newW --set display-height=$newH | Out-Host
                     if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 1) {
                         Write-Log "Fixed display dimensions to ${newW}x${newH}."
                     } else {
@@ -604,7 +611,7 @@ function Invoke-FilterAudio($tempMkv, $keepIds, $movieName) {
 
 # Creates the destination folder and NFO, then starts the background copy job.
 # Returns the destination MKV path for logging.
-function Start-DestinationCopy($localFinalMkv, $movieName, $movieEdition, $destRoot) {
+function Start-DestinationCopy($localFinalMkv, $movieName, $movieEdition, $destRoot, $source = "Blu-ray") {
     $movieFolder = Join-Path $destRoot $movieName
     $finalMkv    = Join-Path $movieFolder "$movieName.mkv"
 
@@ -613,18 +620,19 @@ function Start-DestinationCopy($localFinalMkv, $movieName, $movieEdition, $destR
         Write-Log "Created folder: $movieFolder"
     }
 
-    $nfoPath = Join-Path $movieFolder "$movieName.nfo"
-    if (-not (Test-Path $nfoPath)) {
+    $nfoPath    = Join-Path $movieFolder "$movieName.nfo"
+    $existingNfo = Get-ChildItem -Path $movieFolder -Recurse -Filter "*.nfo" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $existingNfo) {
         $editionTag = if ($movieEdition) { "`n    <edition>$movieEdition</edition>" } else { "" }
         $nfoContent = @"
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <movie>
-    <source>Blu-ray</source>$editionTag
+    <source>$source</source>$editionTag
 </movie>
 "@
         [System.IO.File]::WriteAllText($nfoPath, $nfoContent, [System.Text.Encoding]::UTF8)
         $editionLog = if ($movieEdition) { ", edition: $movieEdition" } else { "" }
-        Write-Log "Created NFO with source: Blu-ray$editionLog"
+        Write-Log "Created NFO with source: $source$editionLog"
     }
 
     $script:copyJob = Start-Job -ScriptBlock {

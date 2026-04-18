@@ -216,7 +216,8 @@ while ($true) {
     # Wait for the previous disc's copy to finish before starting a new one
     Wait-CopyJob
 
-    $finalMkv = Start-DestinationCopy $localFinalMkv $movieName $movieEdition $destRoot
+    $source   = Get-DiscSource $titles[$chosenTitle].Resolution
+    $finalMkv = Start-DestinationCopy $localFinalMkv $movieName $movieEdition $destRoot $source
 
     Write-DoneSummary $audioResult $movieName $finalMkv
 

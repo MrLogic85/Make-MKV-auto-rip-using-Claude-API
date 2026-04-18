@@ -34,9 +34,9 @@ if ($defaultDestRoots.Count -eq 0) {
 $destRoot = Select-Destination
 
 # Discover all immediate subfolders that contain a BDMV subdirectory
-$bdmvFolders = @(Get-ChildItem -Path $sourceRoot -Directory |
+$bdmvFolders = @(Get-ChildItem -Path $sourceRoot -Recurse -Directory |
     Where-Object { Test-Path (Join-Path $_.FullName "BDMV") } |
-    Sort-Object Name)
+    Sort-Object FullName)
 
 if ($bdmvFolders.Count -eq 0) {
     Write-Log "No BDMV folders found in $sourceRoot. Exiting."
@@ -96,8 +96,10 @@ foreach ($folder in $bdmvFolders) {
     $movieName    = $id.Name
     $movieEdition = $id.Edition
 
-    $movieFolder = Join-Path $destRoot $movieName
-    $finalMkv    = Join-Path $movieFolder "$movieName.mkv"
+    $relParent     = $folder.Parent.FullName.Substring($sourceRoot.TrimEnd('\').Length).TrimStart('\')
+    $effectiveDest = if ($relParent) { Join-Path $destRoot $relParent } else { $destRoot }
+    $movieFolder   = Join-Path $effectiveDest $movieName
+    $finalMkv      = Join-Path $movieFolder "$movieName.mkv"
 
     Write-Log "Movie: $movieName"
     Write-Log "Destination: $movieFolder"
@@ -156,13 +158,31 @@ foreach ($folder in $bdmvFolders) {
     Write-Log ""
     Write-Log "Step 4: Copying to destination..."
 
-    $finalMkv = Start-DestinationCopy $localFinalMkv $movieName $movieEdition $destRoot
+    $source   = Get-DiscSource $titles[$chosenTitle].Resolution
+    $finalMkv = Start-DestinationCopy $localFinalMkv $movieName $movieEdition $effectiveDest $source
 
     if (Wait-CopyJob) {
-        Remove-Item -Path $filePath -Recurse -Force
-        Write-Log "Deleted source folder: $filePath"
+        # Move/rename NFO and SRT files to root before deleting disc data
+        $toMove = @(Get-ChildItem -Path $filePath -Recurse -File |
+            Where-Object { $_.Name -match '\.(nfo|srt)$' })
+        foreach ($file in $toMove) {
+            $compoundExt = if ($file.Name -match '(\.[a-z]{2,4}(\.[a-z]+)*\.[a-z]+)$') {
+                $matches[1]
+            } else {
+                $file.Extension
+            }
+            $destName = "$movieName$compoundExt"
+            $destPath = Join-Path $filePath $destName
+            Move-Item -Path $file.FullName -Destination $destPath -Force
+            Write-Log "Moved to root: $($file.Name) -> $destName"
+        }
+
+        Get-ChildItem -Path $filePath -Directory | ForEach-Object {
+            Remove-Item -Path $_.FullName -Recurse -Force
+            Write-Log "Deleted subfolder: $($_.Name)"
+        }
     } else {
-        Write-Log "Copy failed; source folder retained: $filePath"
+        Write-Log "Copy failed; disc data retained: $filePath"
     }
 
     Write-DoneSummary $audioResult $movieName $finalMkv
