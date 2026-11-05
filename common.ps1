@@ -87,7 +87,10 @@ function Invoke-Beep {
     }
 }
 
-function Invoke-Claude($prompt, $imagePaths = @()) {
+# Sends a prompt (plus optional images) to Claude using structured outputs.
+# Returns the reply parsed into an object matching $schema, or $null if the call failed
+# or Claude did not finish its answer.
+function Invoke-Claude($prompt, $schema, $imagePaths = @()) {
     $content = @()
     foreach ($path in $imagePaths) {
         if (Test-Path $path) {
@@ -100,11 +103,16 @@ function Invoke-Claude($prompt, $imagePaths = @()) {
     }
     $content += @{ type = "text"; text = $prompt }
 
+    # Adaptive thinking lets Claude reason through harder discs before answering, and
+    # the summarized thinking is logged. Don't ask for reasoning in the answer itself:
+    # newer models refuse that as "reasoning extraction".
     $body = @{
-        model      = "claude-sonnet-5-5"
-        max_tokens = 500
-        messages   = @(@{ role = "user"; content = $content })
-    } | ConvertTo-Json -Depth 10
+        model         = "claude-sonnet-5-5"
+        max_tokens    = 8000
+        thinking      = @{ type = "adaptive"; display = "summarized" }
+        output_config = @{ format = @{ type = "json_schema"; schema = $schema } }
+        messages      = @(@{ role = "user"; content = $content })
+    } | ConvertTo-Json -Depth 20
 
     try {
         $response = Invoke-RestMethod `
@@ -116,9 +124,31 @@ function Invoke-Claude($prompt, $imagePaths = @()) {
                 "content-type"      = "application/json"
             } `
             -Body $body
-        return $response.content[0].text.Trim()
     } catch {
-        Write-Log "Error calling Claude API: $_"
+        # Windows PowerShell hides the API's error body, so read it from the response
+        $errorBody = $null
+        try { $errorBody = (New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())).ReadToEnd() } catch {}
+        Write-Log "Error calling Claude API: $_ $errorBody"
+        return $null
+    }
+
+    if ($response.stop_reason -ne "end_turn") {
+        $category = if ($response.stop_details.category) { ", $($response.stop_details.category)" } else { "" }
+        Write-Log "Claude did not finish its answer (stop reason: $($response.stop_reason)$category)."
+        return $null
+    }
+
+    # Thinking blocks may come first; the answer is in the text block
+    $response.content | Where-Object { $_.type -eq "thinking" -and $_.thinking } | ForEach-Object {
+        Write-Log "Claude thinking: $($_.thinking.Trim())"
+    }
+    $text = ($response.content | Where-Object { $_.type -eq "text" } | Select-Object -First 1).text
+    Write-Log "Claude response: $text"
+
+    try {
+        return $text | ConvertFrom-Json
+    } catch {
+        Write-Log "Could not parse Claude response as JSON: $_"
         return $null
     }
 }
@@ -316,48 +346,58 @@ function Invoke-IdentifyMovie($discInfoLines, $bdmtXml, $titleLines, $discImages
     $userHint     = $null
     $titleNum     = $null
 
+    $editions = @(
+        "Collectors Edition", "Criterion Collection", "Director's Cut", "Extended Edition",
+        "Final Edition", "IMAX", "Open Matte", "Remastered", "Special Edition",
+        "Superduper Cut", "Theatrical Edition", "Ultimate Edition", "Uncut", "Unrated"
+    )
+
+    # Restrict the title answer to title numbers that actually exist on the disc
+    $titleNums   = @($titleLines | ForEach-Object { if ($_ -match '^Title (\d+):') { [int]$Matches[1] } })
+    $titleSchema = if ($titleNums.Count) { @{ anyOf = @(@{ type = "integer"; enum = $titleNums }, @{ type = "null" }) } } else { @{ type = "null" } }
+
+    $schema = [ordered]@{
+        type                 = "object"
+        properties           = [ordered]@{
+            name    = @{ type = "string" }
+            edition = @{ type = "string"; enum = $editions + "NONE" }
+            title   = $titleSchema
+        }
+        required             = @("name", "edition", "title")
+        additionalProperties = $false
+    }
+
+    $editionInstructions = @"
+Identify the edition or version if this is a special cut. Only specify an edition if you are confident it differs from the standard release. The edition can sometimes be derived from the length of the movie compared to the known theatrical runtime, but only do so if confident. Pick from this list:
+$(($editions | ForEach-Object { "   - $_" }) -join "`n")
+"@
+    $titleInstructions = "Select the title number of the main feature film from the disc titles above. IMPORTANT! Consider the **expected runtime**, some discs have tracks that are longer than the movie, those tracks are usually extra material, not the main feature. Ignore bonus features, trailers, commentary tracks and short clips."
+    $editionTitleFields = @"
+- edition: the edition, or NONE if this is the standard version or you cannot determine the edition.
+- title: the main feature title number, or null if you cannot determine it with confidence.
+"@
+
     do {
         $hintSection   = if ($userHint)           { "`n`nAdditional hint from user: $userHint" } else { "" }
         $bdmtSection   = if ($bdmtXml)            { "`n`nDisc metadata XML:`n$bdmtXml" }         else { "" }
         $titlesSection = if ($titleLines.Count -gt 0) { "`n`nDisc titles:`n" + ($titleLines -join "`n") } else { "" }
+        $discSection   = "The following information was collected from a Blu-ray disc:`n" + ($discInfoLines -join "`n") + $bdmtSection + $titlesSection + $hintSection
 
         $namePrompt = @"
-The following information was collected from a Blu-ray disc:
-$($discInfoLines -join "`n")$bdmtSection$titlesSection$hintSection
+$discSection
 
 Please identify the movie, its edition, and the title number of the main feature.
 
 1. Identify the movie and format it exactly as: Movie Name (Year)
    Make sure the name matches the title on https://www.themoviedb.org/
 
-2. Identify the edition or version if this is a special cut. Only specify an edition if you are confident it differs from the standard release. The edition can sometimes be derived from the length of the movie compared to the known theatrical runtime, but only do so if confident. Pick from this list:
-   - Collectors Edition
-   - Criterion Collection
-   - Director's Cut
-   - Extended Edition
-   - Final Edition
-   - IMAX
-   - Open Matte
-   - Remastered
-   - Special Edition
-   - Superduper Cut
-   - Theatrical Edition
-   - Ultimate Edition
-   - Uncut
-   - Unrated
+2. $editionInstructions
 
-3. Select the title number of the main feature film from the disc titles above. IMPORTANT! Consider the **expected runtime**, some discs have tracks that are longer than the movie, those tracks are usually extra material, not the main feature. Ignore bonus features, trailers, commentary tracks and short clips.
+3. $titleInstructions
 
-Return your answers on separate lines:
-NAME:Movie Name (Year)
-EDITION:edition name
-TITLE:number
-If you cannot identify the movie with high confidence, return: NAME:UNKNOWN
-If this is the standard version or you cannot determine the edition, return: EDITION:NONE
-If you cannot determine the main feature title with confidence, return: TITLE:UNKNOWN
-The formatting is important since I will parse your response with these regexes: NAME:(.+), EDITION:(.+) and TITLE:(\w+)
-
-Important: Do not use special Unicode characters like checkmarks or cross marks in your response. Use plain text only.
+Answer fields:
+- name: Movie Name (Year), or UNKNOWN if you cannot identify the movie with high confidence.
+$editionTitleFields
 "@
 
         Write-Log "Sending to Claude: $($discInfoLines -join '; ')"
@@ -366,35 +406,27 @@ Important: Do not use special Unicode characters like checkmarks or cross marks 
         if ($discImages.Count) { Write-Log "  + $($discImages.Count) image(s)" }
         if ($userHint)         { Write-Log "  + user hint: $userHint" }
         Write-Log "Asking Claude to identify disc, edition and title..."
-        $claudeResponse = Invoke-Claude $namePrompt $discImages
-        Write-Log "Claude response: $claudeResponse"
+        $claudeResponse = Invoke-Claude $namePrompt $schema $discImages
 
-        $nameMatch    = if ($claudeResponse) { [regex]::Match($claudeResponse, 'NAME:(.+)') }    else { [regex]::Match('', 'NAME:(.+)') }
-        $editionMatch = if ($claudeResponse) { [regex]::Match($claudeResponse, 'EDITION:(.+)') } else { [regex]::Match('', 'EDITION:(.+)') }
-        $titleMatch   = if ($claudeResponse) { [regex]::Match($claudeResponse, 'TITLE:(\w+)') }  else { [regex]::Match('', 'TITLE:(\w+)') }
-
-        if ($editionMatch.Success) {
-            $extractedEdition = $editionMatch.Groups[1].Value.Trim()
-            if ($extractedEdition -ne "NONE") {
-                $movieEdition = $extractedEdition
+        if ($claudeResponse) {
+            if ($claudeResponse.edition -ne "NONE") {
+                $movieEdition = $claudeResponse.edition
                 Write-Log "Claude identified edition: $movieEdition"
             }
-        }
 
-        if ($nameMatch.Success) {
-            $extractedName = $nameMatch.Groups[1].Value.Trim()
+            $extractedName = "$($claudeResponse.name)".Trim()
             if ($extractedName -ne "UNKNOWN" -and $extractedName -match '.+\(\d{4}\)') {
                 $movieName = $extractedName
                 Write-Log "Claude identified movie: $movieName"
             } else {
                 Write-Log "Claude could not identify movie from disc name."
             }
-        } else {
-            Write-Log "Claude returned unexpected response for movie name."
-        }
 
-        if ($titleMatch.Success -and $titleMatch.Groups[1].Value -match '^\d+$') {
-            $titleNum = [int]$titleMatch.Groups[1].Value
+            if ($claudeResponse.title -ne $null) {
+                $titleNum = [int]$claudeResponse.title
+            }
+        } else {
+            Write-Log "Claude returned no usable response for movie name."
         }
 
         if (-not $movieName) {
@@ -474,28 +506,27 @@ I have an MKV file of the movie '$movieName' with the following audio tracks. Pl
 3. Keep the original language of the film if it is not English
 4. If multiple tracks exist for the same language at different quality levels, keep only the highest quality one. If multiple tracks exist for the same language at the same quality level, keep ALL of them as they may be different mixes.
 
-Return your final answer as: KEEP:1,2,3
-The formatting of the last line is important since I will parse your response with regex: KEEP:([\d,\s]+)
-
-Important: Do not use special Unicode characters like checkmarks or cross marks in your response. Use plain text only.
+Answer with "keep": the track IDs to keep.
 
 $($trackLines -join "`n")
 "@
 
-    $claudeAudioResponse = Invoke-Claude $audioPrompt
-    Write-Log "Claude audio response: $claudeAudioResponse"
-
-    $audioMatch = if ($claudeAudioResponse) {
-        [regex]::Match($claudeAudioResponse, 'KEEP:([\d,\s]+)')
-    } else {
-        [regex]::Match('', 'KEEP:([\d,\s]+)')
+    $audioSchema = [ordered]@{
+        type                 = "object"
+        properties           = [ordered]@{
+            keep = @{ type = "array"; items = @{ type = "integer"; enum = @($mkvAudioTracks | ForEach-Object { [int]$_.id }) } }
+        }
+        required             = @("keep")
+        additionalProperties = $false
     }
 
-    if (-not $audioMatch.Success) {
+    $claudeAudioResponse = Invoke-Claude $audioPrompt $audioSchema
+
+    if (-not $claudeAudioResponse) {
         Write-Log "Claude could not determine audio tracks. Prompting for manual selection."
         $keepIds = $null
     } else {
-        $keepIds = $audioMatch.Groups[1].Value -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
+        $keepIds = @($claudeAudioResponse.keep | ForEach-Object { "$_" } | Select-Object -Unique)
         Write-Log "Claude selected tracks: $($keepIds -join ', ')"
     }
 
