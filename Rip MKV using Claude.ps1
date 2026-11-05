@@ -217,7 +217,7 @@ while ($true) {
     Wait-CopyJob
 
     $source   = Get-DiscSource $titles[$chosenTitle].Resolution
-    $finalMkv = Start-DestinationCopy $localFinalMkv $movieName $movieEdition $destRoot $source
+    $finalMkv = Start-DestinationCopy $localFinalMkv $movieName $movieEdition $destRoot $source $id.TmdbId
 
     Write-DoneSummary $audioResult $movieName $finalMkv
 

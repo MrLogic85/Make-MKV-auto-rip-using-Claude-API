@@ -19,7 +19,7 @@ Two PowerShell scripts for ripping Blu-ray content to MKV. Both use the Claude A
 - **Local SSD temp storage** – rips to a local SSD first before copying to the destination, avoiding slow network write speeds
 - **Background copy** – disc script only: copies the finished MKV to the destination in the background while the next disc is being ripped
 - **Audible alert** – optional double beep when manual input is required
-- **NFO source tag** – writes a minimal NFO for media managers like tinyMediaManager
+- **NFO source tag** – writes a minimal NFO for media managers like tinyMediaManager, including the TMDB id when the optional TMDB lookup is enabled
 
 ## Requirements
 
@@ -203,7 +203,7 @@ Movies are saved as:
 <destRoot>\Movie Name (Year)\Movie Name (Year).nfo
 ```
 
-The NFO contains the source (`BLURAY`, `UHD_BLURAY`, or `DVD`, detected from resolution) and edition if detected (e.g. `Director's Cut`). For the folder script, an existing NFO in the source folder is preserved instead of generating a new one.
+The NFO contains the source (`BLURAY`, `UHD_BLURAY`, or `DVD`, detected from resolution), the edition if detected (e.g. `Director's Cut`), and the TMDB id if the optional TMDB lookup found a match. The id is written as a Kodi-style `<uniqueid type="tmdb" default="true">` tag, the same format tinyMediaManager writes, so it can scrape the movie by id instead of searching by name. For the folder script, an existing NFO in the source folder is preserved instead of generating a new one.
 
 Compatible with [tinyMediaManager](https://www.tinymediamanager.org/) and media players like Zidoo that use NFO metadata.
 

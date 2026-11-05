@@ -159,7 +159,7 @@ foreach ($folder in $bdmvFolders) {
     Write-Log "Step 4: Copying to destination..."
 
     $source   = Get-DiscSource $titles[$chosenTitle].Resolution
-    $finalMkv = Start-DestinationCopy $localFinalMkv $movieName $movieEdition $effectiveDest $source
+    $finalMkv = Start-DestinationCopy $localFinalMkv $movieName $movieEdition $effectiveDest $source $id.TmdbId
 
     if (Wait-CopyJob) {
         # Move/rename NFO and SRT files to root before deleting disc data

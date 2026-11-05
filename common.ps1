@@ -378,7 +378,8 @@ function Invoke-ParseTitles($infoOutput) {
 # Calls Claude in a loop until the movie is identified. If a TMDB token is configured,
 # the name is matched against TMDB and Claude re-picks edition and title using the
 # official runtime.
-# Returns @{ Name = <sanitized name>; Edition = <edition or $null>; TitleNum = <int or $null> }
+# Returns @{ Name = <sanitized name>; Edition = <edition or $null>; TitleNum = <int or $null>;
+#            TmdbId = <int or $null> }
 function Invoke-IdentifyMovie($discInfoLines, $bdmtXml, $titleLines, $discImages) {
     $movieName    = $null
     $movieEdition = $null
@@ -521,6 +522,7 @@ $editionTitleFields
         Name     = $movieName
         Edition  = $movieEdition
         TitleNum = $titleNum
+        TmdbId   = if ($tmdb) { $tmdb.Id } else { $null }
     }
 }
 
@@ -720,7 +722,7 @@ function Invoke-FilterAudio($tempMkv, $keepIds, $movieName) {
 
 # Creates the destination folder and NFO, then starts the background copy job.
 # Returns the destination MKV path for logging.
-function Start-DestinationCopy($localFinalMkv, $movieName, $movieEdition, $destRoot, $source = "Blu-ray") {
+function Start-DestinationCopy($localFinalMkv, $movieName, $movieEdition, $destRoot, $source = "Blu-ray", $tmdbId = $null) {
     $movieFolder = Join-Path $destRoot $movieName
     $finalMkv    = Join-Path $movieFolder "$movieName.mkv"
 
@@ -733,15 +735,18 @@ function Start-DestinationCopy($localFinalMkv, $movieName, $movieEdition, $destR
     $existingNfo = Get-ChildItem -Path $movieFolder -Recurse -Filter "*.nfo" -File -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $existingNfo) {
         $editionTag = if ($movieEdition) { "`n    <edition>$movieEdition</edition>" } else { "" }
+        # Kodi-style id tag, same format tinyMediaManager writes; lets it scrape by id
+        $tmdbTag    = if ($tmdbId) { "`n    <uniqueid type=`"tmdb`" default=`"true`">$tmdbId</uniqueid>" } else { "" }
         $nfoContent = @"
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <movie>
-    <source>$source</source>$editionTag
+    <source>$source</source>$editionTag$tmdbTag
 </movie>
 "@
         [System.IO.File]::WriteAllText($nfoPath, $nfoContent, [System.Text.Encoding]::UTF8)
         $editionLog = if ($movieEdition) { ", edition: $movieEdition" } else { "" }
-        Write-Log "Created NFO with source: $source$editionLog"
+        $tmdbLog    = if ($tmdbId) { ", TMDB id: $tmdbId" } else { "" }
+        Write-Log "Created NFO with source: $source$editionLog$tmdbLog"
     }
 
     $script:copyJob = Start-Job -ScriptBlock {
