@@ -114,16 +114,21 @@ function Invoke-Claude($prompt, $schema, $imagePaths = @()) {
         messages      = @(@{ role = "user"; content = $content })
     } | ConvertTo-Json -Depth 20
 
+    # Windows PowerShell sends string bodies as ISO-8859-1 and decodes responses without a
+    # charset the same way, which breaks any non-ASCII text (disc names, accented titles).
+    # Send and read raw UTF-8 bytes instead.
     try {
-        $response = Invoke-RestMethod `
+        $webResponse = Invoke-WebRequest `
             -Uri "https://api.anthropic.com/v1/messages" `
             -Method POST `
+            -UseBasicParsing `
             -Headers @{
                 "x-api-key"         = $claudeApiKey
                 "anthropic-version" = "2023-06-01"
-                "content-type"      = "application/json"
             } `
-            -Body $body
+            -ContentType "application/json; charset=utf-8" `
+            -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+        $response = [System.Text.Encoding]::UTF8.GetString($webResponse.RawContentStream.ToArray()) | ConvertFrom-Json
     } catch {
         # Windows PowerShell hides the API's error body, so read it from the response
         $errorBody = $null
