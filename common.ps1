@@ -346,7 +346,7 @@ Please identify the movie, its edition, and the title number of the main feature
    - Uncut
    - Unrated
 
-3. Select the title number of the main feature film from the disc titles above. Consider the expected runtime and ignore bonus features, trailers, commentary tracks and short clips.
+3. Select the title number of the main feature film from the disc titles above. IMPORTANT! Consider the **expected runtime**, some discs have tracks that are longer than the movie, those tracks are usually extra material, not the main feature. Ignore bonus features, trailers, commentary tracks and short clips.
 
 Return your answers on separate lines:
 NAME:Movie Name (Year)
