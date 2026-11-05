@@ -101,7 +101,7 @@ function Invoke-Claude($prompt, $imagePaths = @()) {
     $content += @{ type = "text"; text = $prompt }
 
     $body = @{
-        model      = "claude-sonnet-4-6"
+        model      = "claude-sonnet-5-5"
         max_tokens = 500
         messages   = @(@{ role = "user"; content = $content })
     } | ConvertTo-Json -Depth 10
