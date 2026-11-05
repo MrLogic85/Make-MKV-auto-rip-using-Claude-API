@@ -10,6 +10,7 @@ Two PowerShell scripts for ripping Blu-ray content to MKV. Both use the Claude A
 ## Features
 
 - **Automatic movie identification** – reads disc metadata, volume label, BDMV XML and cover thumbnails; uses Claude to identify the correct movie name and year matching [TMDB](https://www.themoviedb.org/)
+- **Optional TMDB lookup** – with a TMDB token configured, the name is matched against TMDB for the exact title and year, and the official runtime is used to pick the edition and main title
 - **Edition detection** – Claude identifies special cuts (Director's Cut, Extended Edition, etc.) and writes the result to the NFO
 - **Intelligent title selection** – Claude picks the main feature based on runtime, file size, chapter count and resolution
 - **Smart audio filtering** – Claude selects audio tracks based on configured preferred languages and audio quality
@@ -26,6 +27,7 @@ Two PowerShell scripts for ripping Blu-ray content to MKV. Both use the Claude A
 - [MKVToolNix](https://mkvtoolnix.download/) (tested with v88.0)
 - PowerShell 5.1 or later
 - [Anthropic API key](https://console.anthropic.com/)
+- [TMDB API Read Access Token](https://www.themoviedb.org/settings/api) (optional, free)
 
 ## Setup
 
@@ -35,6 +37,7 @@ Two PowerShell scripts for ripping Blu-ray content to MKV. Both use the Claude A
 
 ```powershell
 $claudeApiKey            = "sk-ant-YOUR_KEY_HERE"
+$tmdbReadAccessToken     = "YOUR_TMDB_READ_ACCESS_TOKEN"   # optional, see below
 $localTemp               = "C:\TempDir"
 $defaultDestRoots        = @("C:\Movies", "D:\Movies")
 $preferredAudioLanguages = @("eng", "swe")
@@ -44,7 +47,22 @@ $mkvmerge                = "C:\Program Files\MKVToolNix\mkvmerge.exe"
 $mkvpropedit             = "C:\Program Files\MKVToolNix\mkvpropedit.exe"
 ```
 
-> **Important:** Never commit `config.ps1` – it contains your API key. It is listed in `.gitignore`.
+> **Important:** Never commit `config.ps1` – it contains your API keys. It is listed in `.gitignore`.
+
+### TMDB lookup (optional)
+
+Without TMDB, Claude identifies the movie and its runtime from its own knowledge, which can be wrong for less known films or films released after the model's training cutoff. With a TMDB token configured, the script:
+
+1. Looks up Claude's identified name on TMDB and uses TMDB's exact title and year
+2. Asks Claude to pick the edition and main title again, given TMDB's official theatrical runtime
+
+To enable it:
+
+1. Create a free account at [themoviedb.org](https://www.themoviedb.org/signup)
+2. Go to **Settings → API** and request an API key (choose personal/non-commercial use)
+3. Copy the **API Read Access Token** (the long one starting with `eyJ`, not the short API key) into `$tmdbReadAccessToken` in `config.ps1`
+
+Leave `$tmdbReadAccessToken` out, empty or as the placeholder to skip the lookup. If TMDB has no match or the call fails, the script continues with Claude's answer.
 
 ### Destination folders
 
@@ -92,8 +110,9 @@ flowchart TD
     C[Scan for disc] --> F
     F@{ shape: subprocess, label: "Claude: identify movie, edition and title" } --> F2
     F2{Identified?}
-    F2 -- Yes --> F4
+    F2 -- Yes --> T
     F2 -- No --> F3
+    T@{ shape: subprocess, label: "TMDB (optional): match name, Claude re-picks edition and title using runtime" } --> F4
     F3@{ shape: sloped-rectangle, label: "Enter movie hint for Claude" } --> F
     F4{Title selected?}
     F4 -- Yes --> H
@@ -136,8 +155,9 @@ flowchart TD
     F@{ shape: subprocess, label: "makemkvcon: read title info from folder" } --> G
     G@{ shape: subprocess, label: "Claude: identify movie, edition and title" } --> G2
     G2{Identified?}
-    G2 -- Yes --> G4
+    G2 -- Yes --> T
     G2 -- No --> G3
+    T@{ shape: subprocess, label: "TMDB (optional): match name, Claude re-picks edition and title using runtime" } --> G4
     G3@{ shape: sloped-rectangle, label: "Enter movie hint for Claude" } --> G
     G4{Title selected?}
     G4 -- Yes --> H
@@ -193,7 +213,7 @@ Compatible with [tinyMediaManager](https://www.tinymediamanager.org/) and media 
 - **Rip failure (disc)** – if MakeMKV fails mid-rip, the partial file is removed, the disc is ejected, and you are prompted to retry (after cleaning the disc) or skip to the next disc.
 - **Rip failure (folder)** – if MakeMKV fails, the partial file is removed and the script skips to the next folder.
 - **BD-Java warning** – some discs require Java for menus. This does not affect ripping and can be ignored.
-- **API cost** – each rip uses approximately 2 Claude API calls (name+edition+title combined, then audio). At current Sonnet pricing this costs a fraction of a cent per disc.
+- **API cost** – each rip uses 2 Claude API calls (name+edition+title combined, then audio), or 3 with TMDB enabled (an extra edition+title call using the TMDB runtime). Claude Sonnet 5.5 is used with structured outputs, so answers are always valid JSON. This costs a few cents per disc at most. TMDB lookups are free.
 
 ## License
 

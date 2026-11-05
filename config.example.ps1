@@ -1,5 +1,6 @@
 # Copy this file to config.ps1 and fill in your values
 $claudeApiKey = "sk-ant-YOUR_KEY_HERE"
+$tmdbReadAccessToken = "YOUR_TMDB_READ_ACCESS_TOKEN"
 $localTemp = "C:\TempDir"
 $defaultDestRoots = @("C:\Movies", "D:\Movies")
 $preferredAudioLanguages = @("eng", "swe")

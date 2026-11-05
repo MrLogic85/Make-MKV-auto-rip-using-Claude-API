@@ -153,6 +153,43 @@ function Invoke-Claude($prompt, $schema, $imagePaths = @()) {
     }
 }
 
+# Looks up a "Movie Name (Year)" on TMDB. Optional: returns $null without a call if
+# $tmdbReadAccessToken is not configured.
+# Returns @{ Id; Title; Year; Runtime (minutes, 0 if unknown) } or $null if not found.
+function Find-TmdbMovie($movieName) {
+    if (-not $tmdbReadAccessToken -or $tmdbReadAccessToken -like "YOUR_*") { return $null }
+    if ($movieName -notmatch '^(.+?)\s*\((\d{4})\)$') { return $null }
+    $query = $Matches[1]
+    $year  = [int]$Matches[2]
+
+    $headers = @{ Authorization = "Bearer $tmdbReadAccessToken"; accept = "application/json" }
+    try {
+        $search  = Invoke-RestMethod -Uri "https://api.themoviedb.org/3/search/movie?query=$([uri]::EscapeDataString($query))" -Headers $headers
+        $results = @($search.results | Where-Object { $_.release_date -match '^\d{4}' })
+
+        # Results are sorted by relevance; prefer an exact year, then allow +-1 for regional release dates
+        $match = $results | Where-Object { [int]$_.release_date.Substring(0, 4) -eq $year } | Select-Object -First 1
+        if (-not $match) {
+            $match = $results | Where-Object { [Math]::Abs([int]$_.release_date.Substring(0, 4) - $year) -le 1 } | Select-Object -First 1
+        }
+        if (-not $match) {
+            Write-Log "TMDB: no match for $movieName. Using Claude's name."
+            return $null
+        }
+
+        $details = Invoke-RestMethod -Uri "https://api.themoviedb.org/3/movie/$($match.id)" -Headers $headers
+        return @{
+            Id      = $details.id
+            Title   = $details.title
+            Year    = $details.release_date.Substring(0, 4)
+            Runtime = if ($details.runtime) { [int]$details.runtime } else { 0 }
+        }
+    } catch {
+        Write-Log "Error calling TMDB API: $_. Using Claude's name."
+        return $null
+    }
+}
+
 # Waits for the background copy job to finish.
 # Returns $true if the copy succeeded (or there was no job), $false on failure.
 function Wait-CopyJob {
@@ -338,7 +375,9 @@ function Invoke-ParseTitles($infoOutput) {
     return $titles
 }
 
-# Calls Claude in a loop until the movie is identified.
+# Calls Claude in a loop until the movie is identified. If a TMDB token is configured,
+# the name is matched against TMDB and Claude re-picks edition and title using the
+# official runtime.
 # Returns @{ Name = <sanitized name>; Edition = <edition or $null>; TitleNum = <int or $null> }
 function Invoke-IdentifyMovie($discInfoLines, $bdmtXml, $titleLines, $discImages) {
     $movieName    = $null
@@ -435,6 +474,45 @@ $editionTitleFields
             $userHint = Read-Host "Enter movie hint for Claude"
         }
     } while (-not $movieName)
+
+    $tmdb = Find-TmdbMovie $movieName
+    if ($tmdb) {
+        $movieName = "$($tmdb.Title) ($($tmdb.Year))"
+        Write-Log "TMDB match: $movieName, runtime $($tmdb.Runtime) min (TMDB id $($tmdb.Id))"
+
+        if ($tmdb.Runtime -gt 0) {
+            $refinePrompt = @"
+$discSection
+
+The movie on this disc is $movieName. According to TMDB, its theatrical runtime is $($tmdb.Runtime) minutes.
+
+1. $editionInstructions
+
+2. $titleInstructions
+
+Answer fields:
+$editionTitleFields
+"@
+            $refineSchema = [ordered]@{
+                type                 = "object"
+                properties           = [ordered]@{
+                    edition = $schema.properties.edition
+                    title   = $titleSchema
+                }
+                required             = @("edition", "title")
+                additionalProperties = $false
+            }
+
+            Write-Log "Asking Claude to select edition and title using the TMDB runtime..."
+            $refined = Invoke-Claude $refinePrompt $refineSchema $discImages
+            # Keep the first answer if this call fails
+            if ($refined) {
+                $movieEdition = if ($refined.edition -ne "NONE") { $refined.edition } else { $null }
+                $titleNum     = if ($refined.title -ne $null) { [int]$refined.title } else { $null }
+                Write-Log "Claude edition: $(if ($movieEdition) { $movieEdition } else { 'standard' }), title: $(if ($titleNum -ne $null) { $titleNum } else { 'undetermined' })"
+            }
+        }
+    }
 
     $movieName = $movieName -replace ':', ' -' -replace '"', "'" -replace '[\\/*?<>|]', ''
     $movieName = $movieName -replace '\s{2,}', ' '
