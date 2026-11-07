@@ -43,7 +43,15 @@ while ($true) {
     $lastWaitMsg = ""
 
     while (-not $discName) {
-        $infoOutput = & $makemkvcon -r info disc:0 2>&1
+        $infoOutput = Invoke-DiscScan
+        if ($null -eq $infoOutput) {
+            Write-Log "Disc scan timed out. The disc may be scratched, dirty or damaged. Please clean it and re-insert it."
+            Invoke-Beep
+            Invoke-EjectDrive
+            $lastWaitMsg = ""
+            Start-Sleep -Seconds 5
+            continue
+        }
         $driveFound = $infoOutput | Where-Object { $_ -match '^DRV:0,' -and $_ -notmatch ',256,' }
 
         if (-not $driveFound) {
@@ -180,7 +188,8 @@ while ($true) {
             Write-Log "Waiting for disc..."
             do {
                 Start-Sleep -Seconds 5
-                $pollOutput = & $makemkvcon -r info disc:0 2>&1
+                $pollOutput = Invoke-DiscScan
+                if ($null -eq $pollOutput) { Write-Log "Disc scan timed out. Please clean the disc and re-insert it." }
                 $discReady  = $pollOutput | Where-Object { $_ -match '^DRV:0,' -and $_ -notmatch ',256,' }
             } while (-not $discReady)
 

@@ -65,6 +65,43 @@ function Write-DoneSummary($audioResult, $movieName, $finalMkv) {
     Write-Log "Log saved to: $logFile"
 }
 
+# Runs "makemkvcon info" on the disc drive with a time limit. A disc with unreadable
+# areas can make makemkvcon hang for a long time while the drive keeps retrying, and the
+# tray stays locked until it gives up.
+# Returns the output lines, or $null if the scan was stopped after $timeoutSeconds.
+function Invoke-DiscScan($timeoutSeconds = 300) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName               = $makemkvcon
+    $psi.Arguments              = "-r info disc:0"
+    $psi.UseShellExecute        = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError  = $true
+    $psi.CreateNoWindow         = $true
+
+    $process = [System.Diagnostics.Process]::Start($psi)
+    # Read asynchronously so a full output buffer can't block the process
+    $stdout = $process.StandardOutput.ReadToEndAsync()
+    $stderr = $process.StandardError.ReadToEndAsync()
+
+    if (-not $process.WaitForExit($timeoutSeconds * 1000)) {
+        try { $process.Kill() } catch {}
+        return $null
+    }
+    $process.WaitForExit()
+
+    return ($stdout.Result + "`n" + $stderr.Result) -split "`r?`n" | Where-Object { $_ -ne "" }
+}
+
+# Ejects the first optical drive. Used when the drive letter from makemkvcon is unknown.
+function Invoke-EjectDrive {
+    $drive = (Get-CimInstance Win32_CDROMDrive -ErrorAction SilentlyContinue | Select-Object -First 1).Drive
+    if ($drive) {
+        Write-Log "Ejecting disc ($drive)..."
+        $shell = New-Object -ComObject Shell.Application
+        $shell.Namespace(17).ParseName($drive).InvokeVerb("Eject")
+    }
+}
+
 function Get-DiscSource($resolution) {
     $pixels = if ($resolution -match '^(\d+)x(\d+)$') { [int]$Matches[1] * [int]$Matches[2] } else { 0 }
     if     ($pixels -ge 8000000) { return "UHD_BLURAY" }

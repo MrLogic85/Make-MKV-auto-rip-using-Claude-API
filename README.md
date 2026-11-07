@@ -211,6 +211,7 @@ Compatible with [tinyMediaManager](https://www.tinymediamanager.org/) and media 
 
 - **MPEG-2 aspect ratio bug** – MakeMKV sometimes sets incorrect display dimensions for MPEG-2 video. The script detects near 1:1 aspect ratios and prompts you to pick the correct one.
 - **Rip failure (disc)** – if MakeMKV fails mid-rip, the partial file is removed, the disc is ejected, and you are prompted to retry (after cleaning the disc) or skip to the next disc.
+- **Unreadable disc** – a scratched, dirty or damaged disc can make the drive retry for a long time while the tray stays locked. The disc scan is stopped after 5 minutes, the script beeps and ejects the disc so it can be cleaned and re-inserted. Windows logs this as "The device, \Device\CdRom0, has a bad block" in the System event log.
 - **Rip failure (folder)** – if MakeMKV fails, the partial file is removed and the script skips to the next folder.
 - **BD-Java warning** – some discs require Java for menus. This does not affect ripping and can be ignored.
 - **API cost** – each rip uses 2 Claude API calls (name+edition+title combined, then audio), or 3 with TMDB enabled (an extra edition+title call using the TMDB runtime). Claude Sonnet 5.5 is used with structured outputs, so answers are always valid JSON. This costs a few cents per disc at most. TMDB lookups are free.
